@@ -184,6 +184,9 @@ export const documentRepo: DocumentRepo = {
 
 const vectorLiteral = (v: number[]): string => `[${v.join(",")}]`;
 
+/** Above this many chunks visible to a workspace, retrieval switches from exact to ANN search (see hybridSearch). */
+export const EXACT_SEARCH_MAX_CHUNKS = 50_000;
+
 /**
  * Rows visible to the active workspace: its own chunks, plus chunks of documents EXPLICITLY shared into it.
  * This predicate is inlined into both retrieval branches below — filtering happens inside the query, not after it.
@@ -239,31 +242,43 @@ export const chunkStore: ChunkStorePort = {
     const ws = scope.workspaceId;
     const qv = vectorLiteral(embedding);
     return withTenant(scope, async (tx) => {
-      // HNSW is approximate and post-filters; iterative scans keep scanning until enough rows PASS the workspace
-      // predicate, so a small workspace next to a huge one still gets its k results.
-      await tx.execute(sql`SET LOCAL hnsw.iterative_scan = relaxed_order`);
-      await tx.execute(sql`SET LOCAL hnsw.ef_search = 100`);
-      await tx.execute(sql`SET LOCAL hnsw.max_scan_tuples = 20000`);
+      /*
+       * Search mode. ANN (HNSW) is approximate and applies row filters AFTER the graph traversal, so for a small tenant
+       * beside large neighbours it can miss rows entirely — outlier vectors may be unreachable in the graph, and no scan
+       * setting fixes that. For tenancy-critical retrieval we therefore search EXACTLY within the workspace (btree on
+       * workspace_id + sort: perfect recall, cost linear in the workspace's own size) and only fall back to ANN when the
+       * workspace is large enough that an exact scan would be slow. `(dist) + 0` is what stops the planner from using HNSW.
+       */
+      const size = await tx.execute<{ n: string }>(sql`
+        SELECT COALESCE(sum(d.chunk_count), 0)::text AS n FROM documents d
+        WHERE d.status = 'ready' AND (d.workspace_id = ${ws}::uuid OR d.id IN (
+          SELECT ds.document_id FROM document_shares ds WHERE ds.target_workspace_id = ${ws}::uuid))`);
+      const exact = Number(size.rows[0]?.n ?? 0) <= EXACT_SEARCH_MAX_CHUNKS;
+      const vecOrder = exact ? sql`(c.embedding <=> q.qv) + 0` : sql`c.embedding <=> q.qv`;
 
       const r = await tx.execute<{
         id: string; document_id: string; title: string; heading_path: string; ordinal: number; content: string;
         workspace_id: string; flagged: boolean; vr: string | null; kr: string | null; sim: number; kw: number | null; rrf: number;
       }>(sql`
         WITH q AS (SELECT ${qv}::vector AS qv, websearch_to_tsquery('english', ${text}) AS tq),
+        -- Top-N first (ORDER BY + LIMIT), THEN rank: a window function before LIMIT would force a full scan.
         vec AS (
-          SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <=> q.qv) AS rnk
-          FROM chunks c CROSS JOIN q
-          WHERE ${visibleChunk(ws)}
-          ORDER BY c.embedding <=> q.qv
-          LIMIT ${params.candidatePool}
+          SELECT s.id, ROW_NUMBER() OVER (ORDER BY s.ord) AS rnk FROM (
+            SELECT c.id, ${vecOrder} AS ord
+            FROM chunks c CROSS JOIN q
+            WHERE ${visibleChunk(ws)}
+            ORDER BY ${vecOrder}
+            LIMIT ${params.candidatePool}
+          ) s
         ),
         kw AS (
-          SELECT c.id, ts_rank_cd(c.tsv, q.tq) AS score,
-                 ROW_NUMBER() OVER (ORDER BY ts_rank_cd(c.tsv, q.tq) DESC) AS rnk
-          FROM chunks c CROSS JOIN q
-          WHERE c.tsv @@ q.tq AND ${visibleChunk(ws)}
-          ORDER BY score DESC
-          LIMIT ${params.candidatePool}
+          SELECT s.id, s.score, ROW_NUMBER() OVER (ORDER BY s.score DESC) AS rnk FROM (
+            SELECT c.id, ts_rank_cd(c.tsv, q.tq) AS score
+            FROM chunks c CROSS JOIN q
+            WHERE c.tsv @@ q.tq AND ${visibleChunk(ws)}
+            ORDER BY score DESC
+            LIMIT ${params.candidatePool}
+          ) s
         ),
         fused AS (
           SELECT COALESCE(v.id, k.id) AS id, v.rnk AS vr, k.rnk AS kr, k.score AS kw,

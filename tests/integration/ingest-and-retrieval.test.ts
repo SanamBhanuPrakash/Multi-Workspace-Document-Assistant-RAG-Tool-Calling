@@ -9,7 +9,12 @@ import { chunkStore, documentRepo } from "@/infra/db/repositories";
 import { makeUser, makeWorkspace, vecLiteral } from "../helpers/db";
 import { doc, realIngestDeps, scopeFor } from "../helpers/deps";
 
-afterAll(() => closePool());
+// Bulk distractor fixtures must not outlive this file: thousands of identical vectors change HNSW graph shape and planner
+// choices for every later test sharing the database (found the hard way — see PROJECT_LOG).
+afterAll(async () => {
+  await withSystem((tx) => tx.execute(sql`DELETE FROM documents WHERE title = 'bulk'`));
+  await closePool();
+});
 
 const PARAMS: RetrievalParams = { k: 6, candidatePool: 30, rrfK: 60, minSimilarity: 0.2 };
 const embedder = new FakeEmbedding();
@@ -188,32 +193,38 @@ describe("CANARY — workspace isolation through the real retrieval path", () =>
     await expect(scopeFor(other, "'; DROP TABLE chunks; --")).rejects.toMatchObject({ code: "not_a_member" });
   });
 
-  // HONEST SCOPE: at this data size Postgres plans an EXACT scan inside the workspace (btree on workspace_id + sort), so this
-  // verifies correct results next to a large, closer neighbour — not the HNSW post-filter shortfall itself. That failure mode
-  // appears at much larger scale; `hnsw.iterative_scan` is configured in hybridSearch as the safety net (see README).
-  it("small workspace still gets its own results next to a huge, closer neighbour workspace", async () => {
-    // 4,000 distractor chunks in ANOTHER workspace whose vectors EQUAL the query (strictly closer than the target's real chunk).
-    const query = "quarterly zephyr calibration procedure";
-    const qvec = vecLiteral(fakeEmbedOne(query));
-    const docId = await withSystem(async (tx) => {
+  it("RECALL (vector branch only): a small tenant's true match is found among 3,000 strictly closer foreign vectors", async () => {
+    // Isolates the VECTOR branch: the target text shares no words with the query, so the keyword branch cannot rescue it.
+    // Its embedding is hand-built at cosine ≈ 0.5 to the query; every foreign distractor is a noisy copy (cosine ≈ 1).
+    // A search that takes the nearest rows first and filters by workspace afterwards would return only distractors.
+    const query = "gardening soil acidity testing";
+    const q = fakeEmbedOne(query);
+    const qvec = vecLiteral(q);
+    const ortho = new Array<number>(768).fill(0);
+    ortho[700] = 1; // fakeEmbedOne is sparse; axis 700 is (almost surely) orthogonal to the query
+    const targetVec = q.map((x, i) => 0.5 * x + 0.866 * ortho[i]!);
+    await withSystem(async (tx) => {
       const d = await tx.execute<{ id: string }>(sql`
-        INSERT INTO documents (workspace_id, title, filename, mime, size_bytes, content_hash, status, created_by)
-        VALUES (${wsC}::uuid, 'bulk', 'bulk.md', 'text/markdown', 1, ${`bulk-${Date.now()}`}, 'ready', ${other}) RETURNING id`);
-      const id = d.rows[0]!.id;
+        INSERT INTO documents (workspace_id, title, filename, mime, size_bytes, content_hash, status, chunk_count, created_by)
+        VALUES (${wsC}::uuid, 'bulk', 'bulk.md', 'text/markdown', 1, ${`bulk-${Date.now()}`}, 'ready', 3000, ${other}) RETURNING id`);
       await tx.execute(sql`
         INSERT INTO chunks (workspace_id, document_id, ordinal, content, token_count, embedding, embedding_model)
-        SELECT ${wsC}::uuid, ${id}::uuid, g, 'distractor ' || g, 3,
-               ${qvec}::vector, 'test'
-        FROM generate_series(1, 4000) g`);
-      await tx.execute(sql`ANALYZE chunks`);
-      return id;
+        SELECT ${wsC}::uuid, ${d.rows[0]!.id}::uuid, g, 'distractor ' || g, 3,
+               ARRAY(SELECT x + random() * 0.02 + g * 0 FROM unnest((${qvec}::vector)::real[]) AS x)::vector, 'test'
+        FROM generate_series(1, 3000) g`);
     });
-    expect(docId).toBeTruthy();
     const scopeB = await scopeFor(owner, wsB);
-    await ingest(scopeB, "calibration", "# Calibration\nThe quarterly zephyr calibration procedure requires a torque wrench and two technicians.");
+    await withTenant(scopeB, async (tx) => {
+      const dd = await tx.execute<{ id: string }>(sql`
+        INSERT INTO documents (workspace_id, title, filename, mime, size_bytes, content_hash, status, chunk_count, created_by)
+        VALUES (${wsB}::uuid, 'target', 't.md', 'text/markdown', 1, ${`target-${Date.now()}`}, 'ready', 1, ${owner}) RETURNING id`);
+      await tx.execute(sql`
+        INSERT INTO chunks (workspace_id, document_id, ordinal, content, token_count, embedding, embedding_model)
+        VALUES (${wsB}::uuid, ${dd.rows[0]!.id}::uuid, 0, 'Zzyzx unrelated wording entirely', 4, ${vecLiteral(targetVec)}::vector, 'test')`);
+    });
+    await withSystem((tx) => tx.execute(sql`ANALYZE chunks`));
     const hits = await search(scopeB, query);
-    expect(hits.length).toBeGreaterThan(0);
-    expect(hits[0]!.content).toContain("zephyr calibration");
+    expect(hits.map((h) => h.content)).toContain("Zzyzx unrelated wording entirely");
     expect(hits.every((h) => h.workspaceId === wsB)).toBe(true);
   });
 
