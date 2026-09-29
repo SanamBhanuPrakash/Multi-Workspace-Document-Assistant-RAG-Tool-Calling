@@ -71,6 +71,33 @@ describe("RLS: tenant isolation at the database layer", () => {
     expect(asBob.rows.length).toBe(1);
   });
 
+  it("REGRESSION: an RLS-only vector query still returns the tenant's rows when thousands of closer foreign rows exist", async () => {
+    // HNSW applies filters (including RLS) after the index scan. If the 100 nearest rows all belong to another tenant, a
+    // query without iterative scans returns NOTHING for this tenant. Self-contained: does not rely on other test files.
+    const carol = await makeUser("carol");
+    const wsCarol = await makeWorkspace(carol, "Carol");
+    const dave = await makeUser("dave");
+    const wsDave = await makeWorkspace(dave, "Dave");
+    await addDoc(forgeScope(dave, wsDave), { text: "dave's only chunk", axis: 400 });
+    const q = `[${axisVector(9).join(",")}]`;
+    await withSystem(async (tx) => {
+      const d = await tx.execute<{ id: string }>(sql`
+        INSERT INTO documents (workspace_id, title, filename, mime, size_bytes, content_hash, status, created_by)
+        VALUES (${wsCarol}::uuid, 'bulk', 'bulk', 't', 1, ${`bulk-${randomUUID()}`}, 'ready', ${carol}) RETURNING id`);
+      await tx.execute(sql`
+        INSERT INTO chunks (workspace_id, document_id, ordinal, content, token_count, embedding, embedding_model)
+        SELECT ${wsCarol}::uuid, ${d.rows[0]!.id}::uuid, g, 'carol distractor', 1,
+               -- near the query but DISTINCT (identical duplicates are a pathological case for HNSW graphs); the g*0 term forces per-row evaluation
+               ARRAY(SELECT x + random() * 0.05 + g * 0 FROM unnest((${q}::vector)::real[]) AS x)::vector, 't'
+        FROM generate_series(1, 3000) g`);
+      await tx.execute(sql`ANALYZE chunks`);
+    });
+    const asDave = await withTenant(forgeScope(dave, wsDave), (tx) =>
+      tx.execute<{ content: string }>(sql`SELECT content FROM chunks ORDER BY embedding <=> ${q}::vector LIMIT 5`),
+    );
+    expect(asDave.rows.map((r) => r.content)).toEqual(["dave's only chunk"]);
+  });
+
   it("FORGED scope: a user naming a workspace they do not belong to gets nothing (DB-side membership check)", async () => {
     const forged = forgeScope(bob, wsA); // application check bypassed on purpose
     await withTenant(forged, async (tx) => {

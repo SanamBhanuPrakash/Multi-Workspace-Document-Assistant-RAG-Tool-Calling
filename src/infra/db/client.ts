@@ -34,6 +34,13 @@ export const db = (): Db => drizzle(pool(), { schema });
 async function applyGuards(tx: Tx): Promise<void> {
   await tx.execute(sql`SET LOCAL statement_timeout = '20s'`);
   await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
+  // HNSW is approximate and applies row filters AFTER the index scan (this includes RLS policies). Without iterative scans a
+  // filtered query can come back short — or empty — when the nearest 100 rows all belong to other tenants (observed once the
+  // table held a few thousand foreign rows). Iterative scanning keeps going until enough rows pass the filter. It is set
+  // for EVERY tenant transaction so no vector query can forget it.
+  await tx.execute(sql`SET LOCAL hnsw.iterative_scan = relaxed_order`);
+  await tx.execute(sql`SET LOCAL hnsw.ef_search = 100`);
+  await tx.execute(sql`SET LOCAL hnsw.max_scan_tuples = 20000`);
 }
 
 /**
