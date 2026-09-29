@@ -31,7 +31,7 @@ const schema = z
     GEMINI_CHAT_MODEL: z.string().default("gemini-2.5-flash"),
     GEMINI_EMBED_MODEL: z.string().default("gemini-embedding-001"),
     GROQ_API_KEY: z.string().min(1).optional(),
-    GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
+    GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
 
     /** Explicit opt-in so a mis-set production env can never silently run on fake providers. */
     LATTICE_ALLOW_FAKE_PROVIDERS: z.enum(["0", "1"]).default("0"),

@@ -543,7 +543,7 @@ export const toolCallRepo: ToolCallRepo = {
           errorMessage: patch.errorMessage ?? null,
           latencyMs: patch.latencyMs ?? null,
           confirmedBy: patch.confirmedBy ?? null,
-          finishedAt: new Date(),
+          finishedAt: patch.status === "running" ? null : new Date(),
         })
         .where(and(eq(t.toolCalls.id, id), eq(t.toolCalls.workspaceId, scope.workspaceId)));
     });
