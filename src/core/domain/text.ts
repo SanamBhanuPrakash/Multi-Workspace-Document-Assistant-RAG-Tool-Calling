@@ -6,7 +6,7 @@
  * bidi-control characters, and C0 control characters. The number removed is returned so the injection scanner can
  * flag the document — hidden text in an upload is itself a signal.
  */
-const HIDDEN_UNICODE = /[\u{E0000}-\u{E007F}​-‏‪-‮⁠-⁤⁦-⁩﻿­]/gu;
+const HIDDEN_UNICODE = /[\u{E0000}-\u{E007F}\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\u00AD]/gu;
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
 export type NormalizedText = { text: string; hiddenCharCount: number };
