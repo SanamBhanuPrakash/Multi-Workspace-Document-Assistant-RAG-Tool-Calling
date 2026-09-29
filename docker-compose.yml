@@ -1,0 +1,21 @@
+# Local development database. Mirrors production (Neon Postgres 17 + pgvector).
+# The credentials below are a LOCAL-ONLY convenience for a container bound to 127.0.0.1.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: lattice-db
+    environment:
+      POSTGRES_USER: lattice
+      POSTGRES_PASSWORD: lattice_dev
+      POSTGRES_DB: lattice
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - lattice_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lattice -d lattice"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  lattice_pgdata:
