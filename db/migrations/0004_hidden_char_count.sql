@@ -1,0 +1,1 @@
+ALTER TABLE "document_sources" ADD COLUMN "hidden_char_count" integer DEFAULT 0 NOT NULL;

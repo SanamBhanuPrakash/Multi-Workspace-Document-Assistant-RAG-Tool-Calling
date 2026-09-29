@@ -13,6 +13,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   vector,
 } from "drizzle-orm/pg-core";
@@ -106,6 +107,8 @@ export const documentSources = pgTable(
     documentId: uuid("document_id").primaryKey(),
     workspaceId: uuid("workspace_id").notNull(),
     text: text("text").notNull(),
+    /** Invisible characters stripped at ingestion. Non-zero taints every chunk of the document (hidden-text signal). */
+    hiddenCharCount: integer("hidden_char_count").notNull().default(0),
   },
   (t) => [
     foreignKey({
@@ -257,6 +260,8 @@ export const messages = pgTable(
     abstained: boolean("abstained").notNull().default(false),
     /** Links an assistant reply to the user message that produced it (retry & dedupe). */
     replyToId: uuid("reply_to_id"),
+    /** Client-generated id for the user's send. Makes a double-submit / retry idempotent per conversation. */
+    clientRequestId: text("client_request_id"),
     createdAt: createdAt(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
@@ -268,6 +273,7 @@ export const messages = pgTable(
     }).onDelete("cascade"),
     unique("messages_id_ws_uq").on(t.id, t.workspaceId),
     index("messages_conv_created_idx").on(t.conversationId, t.createdAt),
+    uniqueIndex("messages_client_req_uq").on(t.conversationId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
     check("messages_role_chk", sql`${t.role} in ('user','assistant')`),
     check("messages_status_chk", sql`${t.status} in ('pending','streaming','complete','failed')`),
   ],
