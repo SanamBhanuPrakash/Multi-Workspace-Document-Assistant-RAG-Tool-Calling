@@ -24,7 +24,6 @@
     "verify": "npm run typecheck && npm run lint && npm run arch && npm run test"
   },
   "dependencies": {
-    "@google/genai": "^2.24.0",
     "better-auth": "^1.7.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

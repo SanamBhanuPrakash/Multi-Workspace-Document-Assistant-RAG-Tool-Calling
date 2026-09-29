@@ -28,7 +28,9 @@ const schema = z
     LLM_PROVIDER: z.enum(["gemini", "groq", "fake"]).default("gemini"),
     EMBED_PROVIDER: z.enum(["gemini", "fake"]).default("gemini"),
     GEMINI_API_KEY: z.string().min(1).optional(),
-    GEMINI_CHAT_MODEL: z.string().default("gemini-2.5-flash"),
+    GEMINI_CHAT_MODEL: z.string().default("gemini-3.6-flash"),
+    /** Comma-separated Gemini models tried (in order) after the primary if it is rate-limited or overloaded. */
+    GEMINI_CHAT_FALLBACK_MODELS: z.string().default("gemini-3.5-flash"),
     GEMINI_EMBED_MODEL: z.string().default("gemini-embedding-001"),
     GROQ_API_KEY: z.string().min(1).optional(),
     GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
