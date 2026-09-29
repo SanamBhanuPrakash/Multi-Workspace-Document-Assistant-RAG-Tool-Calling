@@ -368,21 +368,8 @@ export const workspaceIntegrations = pgTable(
 
 /* ───────────────────────────── observability ───────────────────────────── */
 
-export type RetrievalResultRow = {
-  chunkId: string;
-  documentId: string;
-  documentTitle: string;
-  ordinal: number;
-  workspaceId: string;
-  sharedFrom: string | null;
-  vectorRank: number | null;
-  keywordRank: number | null;
-  vectorSimilarity: number | null;
-  keywordScore: number | null;
-  rrfScore: number;
-  flagged: boolean;
-  usedInContext: boolean;
-};
+export type { RetrievalResultRow } from "@/core/domain/types";
+import type { RetrievalResultRow } from "@/core/domain/types";
 
 export const retrievalEvents = pgTable(
   "retrieval_events",

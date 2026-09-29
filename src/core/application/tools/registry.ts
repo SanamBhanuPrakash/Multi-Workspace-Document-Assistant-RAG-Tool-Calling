@@ -41,6 +41,11 @@ export interface ToolDefinition<S extends z.ZodType = z.ZodType> {
   /** Must be a strictObject: unknown keys (e.g. a model-supplied workspace_id) are rejected, not ignored. */
   readonly args: S;
   readonly effect: ToolEffect;
+  /**
+   * True when the tool's output becomes CITABLE SOURCES (search_documents). Answers built on such a tool must still cite them;
+   * only non-citable tools (actions, task lists) may support an uncited reply such as "Saved your task".
+   */
+  readonly citable?: boolean;
   run(ctx: ToolContext, args: z.output<S>): Promise<ToolOutcome>;
 }
 
@@ -144,6 +149,7 @@ export const searchDocuments: ToolDefinition = {
     limit: z.number().int().min(1).max(8).default(4),
   }),
   effect: "read",
+  citable: true,
   async run(ctx, args) {
     const a = args as { query: string; limit: number };
     const sources = await ctx.deps.retrieve(ctx.scope, a.query, a.limit);

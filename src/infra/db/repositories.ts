@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
-import type { MembershipLookup, Role } from "@/core/security/tenant";
+import type { MembershipLookup, Role, TenantScope } from "@/core/security/tenant";
 import { validateWebhookUrl, webhookHint } from "@/core/security/webhook";
 import type {
   ChunkStorePort,
@@ -490,7 +490,15 @@ export const conversationRepo: ConversationRepo = {
       const [a] = await tx
         .update(t.messages)
         .set({ status: "pending", errorCode: null, content: "", citations: [], abstained: false, completedAt: null })
-        .where(and(eq(t.messages.id, assistantMessageId), eq(t.messages.workspaceId, scope.workspaceId), eq(t.messages.role, "assistant"), eq(t.messages.status, "failed")))
+        .where(
+          and(
+            eq(t.messages.id, assistantMessageId),
+            eq(t.messages.workspaceId, scope.workspaceId),
+            eq(t.messages.role, "assistant"),
+            // failed, OR pending for >2 min: the serverless function that owned it was almost certainly killed mid-generation
+            sql`(${t.messages.status} = 'failed' OR (${t.messages.status} = 'pending' AND ${t.messages.createdAt} < now() - interval '2 minutes'))`,
+          ),
+        )
         .returning();
       if (!a?.replyToId) return null;
       const [u] = await tx.select().from(t.messages).where(eq(t.messages.id, a.replyToId)).limit(1);
@@ -692,6 +700,47 @@ export const rateLimiter: RateLimiterPort = {
         RETURNING count`);
       if (Math.random() < 0.01) await tx.execute(sql`DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'`);
       return (r.rows[0]?.count ?? 1) <= limit;
+    });
+  },
+};
+
+/* ───────────────────────────── opt-in cross-workspace sharing ───────────────────────────── */
+
+/**
+ * Default isolation is untouched: with no row in document_shares nothing crosses a workspace boundary. A share is granted
+ * from the SOURCE workspace by an admin who ALSO belongs to the target (enforced by the RLS insert policy, not just here),
+ * and it is read-only: the target can retrieve and cite the document, never edit or delete it.
+ */
+export const shareRepo = {
+  async grant(scope: TenantScope, documentId: string, targetWorkspaceId: string): Promise<void> {
+    if (scope.role !== "owner" && scope.role !== "admin") throw new Error("forbidden");
+    await withTenant(scope, async (tx) => {
+      const own = await tx.select({ id: t.documents.id }).from(t.documents).where(and(eq(t.documents.id, documentId), eq(t.documents.workspaceId, scope.workspaceId))).limit(1);
+      if (!own[0]) throw new Error("not_found");
+      await tx
+        .insert(t.documentShares)
+        .values({ documentId, sourceWorkspaceId: scope.workspaceId, targetWorkspaceId, grantedBy: scope.userId })
+        .onConflictDoNothing({ target: [t.documentShares.documentId, t.documentShares.targetWorkspaceId] });
+      await tx.insert(t.auditLog).values({ workspaceId: scope.workspaceId, userId: scope.userId, action: "document.share", targetType: "document", targetId: documentId, metadata: { targetWorkspaceId } });
+    });
+  },
+
+  async revoke(scope: TenantScope, documentId: string, targetWorkspaceId: string): Promise<void> {
+    if (scope.role !== "owner" && scope.role !== "admin") throw new Error("forbidden");
+    await withTenant(scope, async (tx) => {
+      await tx.delete(t.documentShares).where(and(eq(t.documentShares.documentId, documentId), eq(t.documentShares.targetWorkspaceId, targetWorkspaceId), eq(t.documentShares.sourceWorkspaceId, scope.workspaceId)));
+      await tx.insert(t.auditLog).values({ workspaceId: scope.workspaceId, userId: scope.userId, action: "document.unshare", targetType: "document", targetId: documentId, metadata: { targetWorkspaceId } });
+    });
+  },
+
+  /** Outgoing shares of the workspace's documents: which workspaces can see each document. */
+  async outgoing(scope: TenantScope): Promise<{ documentId: string; targetWorkspaceId: string }[]> {
+    return withTenant(scope, async (tx) => {
+      const rows = await tx
+        .select({ documentId: t.documentShares.documentId, targetWorkspaceId: t.documentShares.targetWorkspaceId })
+        .from(t.documentShares)
+        .where(eq(t.documentShares.sourceWorkspaceId, scope.workspaceId));
+      return rows;
     });
   },
 };

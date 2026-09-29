@@ -35,3 +35,19 @@ export function validateCitations(text: string, validNumbers: ReadonlySet<number
   });
   return { text: out, used: [...used].sort((a, b) => a - b), removed };
 }
+
+/**
+ * Different models spell citations differently: `[1]`, fullwidth `【1】` (gpt-oss), `【1†L3-L5】`, `[1, 2]`, `[1-3]`.
+ * Normalise them all to the canonical ASCII form `[n]` BEFORE validating, so a correct answer from any provider in the
+ * failover chain is judged on its substance rather than its punctuation. Anything that is not a plain number stays untouched.
+ */
+export function normalizeCitations(text: string): string {
+  return text
+    .replace(/【(\d{1,3})(?:[†:][^】]*)?】/g, "[$1]")
+    .replace(/\[(\d{1,3})\s*[-–]\s*(\d{1,3})\]/g, (m, a: string, b: string) => {
+      const lo = Number(a);
+      const hi = Number(b);
+      return hi > lo && hi - lo < 6 ? Array.from({ length: hi - lo + 1 }, (_, i) => `[${lo + i}]`).join("") : m;
+    })
+    .replace(/\[(\d{1,3}(?:\s*,\s*\d{1,3})+)\]/g, (_m, list: string) => list.split(",").map((n) => `[${n.trim()}]`).join(""));
+}

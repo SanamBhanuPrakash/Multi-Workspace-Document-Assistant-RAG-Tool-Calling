@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { scanForInjection } from "@/core/security/injection";
 import { buildContextBlock, newFenceNonce, SYSTEM_PROMPT_RULES } from "@/core/security/fence";
-import { parseStatusLine, validateCitations } from "@/core/security/grounding";
+import { normalizeCitations, parseStatusLine, validateCitations } from "@/core/security/grounding";
 
 describe("scanForInjection — advisory heuristic (flags & taints; never the only defence)", () => {
   const hostile: [string, string][] = [
@@ -113,6 +113,14 @@ describe("grounding — server-side verification of what the model claims", () =
     const r = validateCitations("Confident but unsourced claim [9].", new Set([1]));
     expect(r.used).toEqual([]);
     expect(r.removed).toEqual([9]);
+  });
+  it("normalises the citation spellings different models use (fullwidth 【1】, 【1†L3】, [1, 2], [1-3])", () => {
+    expect(normalizeCitations("Code【1】. Also【2†L3-L5】.")).toBe("Code[1]. Also[2].");
+    expect(normalizeCitations("Both [1, 2] agree, see [3-5].")).toBe("Both [1][2] agree, see [3][4][5].");
+    expect(normalizeCitations("Ranges like [1-99] are left alone; so is [note].")).toBe("Ranges like [1-99] are left alone; so is [note].");
+    // regression: a correct gpt-oss answer used to be rejected as "uncited"
+    const v = validateCitations(normalizeCitations("The vault access code is ZEBRA-4417【1】."), new Set([1]));
+    expect(v.used).toEqual([1]);
   });
   it("ignores bracketed non-citations like [note] and [ ]", () => {
     const r = validateCitations("See [note] and [x] and [1].", new Set([1]));

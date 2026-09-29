@@ -99,3 +99,51 @@ export type WorkspaceDTO = { id: string; name: string; slug: string; color: stri
 
 /** Token usage reported by a provider; zero when the provider does not report it. */
 export type Usage = { tokensIn: number; tokensOut: number };
+
+export type ConversationSummary = { id: string; title: string; updatedAt: string };
+
+export type ObservabilitySummary = {
+  windowHours: number;
+  requests: number;
+  errors: number;
+  abstained: number;
+  retrievalHitRate: number | null;
+  latencyMs: { p50: number | null; p95: number | null; avg: number | null };
+  firstTokenMs: { p50: number | null };
+  tokensIn: number;
+  tokensOut: number;
+  byProvider: { provider: string; model: string; requests: number; tokensIn: number; tokensOut: number }[];
+  tools: { name: string; status: string; count: number }[];
+  ingestion: { ready: number; failed: number; processing: number };
+  hourly: { hour: string; requests: number; errors: number; p95Ms: number | null }[];
+};
+
+export type RetrievalEventDTO = {
+  id: string;
+  messageId: string | null;
+  query: string;
+  standaloneQuery: string;
+  hit: boolean;
+  topSimilarity: number | null;
+  latencyMs: number;
+  createdAt: string;
+  workspaceId: string;
+  params: RetrievalParams;
+  results: RetrievalResultRow[];
+};
+
+export type RetrievalResultRow = {
+  chunkId: string;
+  documentId: string;
+  documentTitle: string;
+  ordinal: number;
+  workspaceId: string;
+  sharedFrom: string | null;
+  vectorRank: number | null;
+  keywordRank: number | null;
+  vectorSimilarity: number | null;
+  keywordScore: number | null;
+  rrfScore: number;
+  flagged: boolean;
+  usedInContext: boolean;
+};

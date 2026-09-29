@@ -3,7 +3,7 @@ import type { Citation, MessageDTO, RetrievalParams, RetrievedChunk, ToolCallSta
 import type { EmbeddingPort, LlmMessage, LlmPort } from "../ports/providers";
 import type { ChunkStorePort, ConversationRepo, ObservabilityRepo, RateLimiterPort } from "../ports/repositories";
 import { buildContextBlock, newFenceNonce, QUESTION_MARKER, SYSTEM_PROMPT_RULES, type FencedSource } from "../security/fence";
-import { parseStatusLine, validateCitations } from "../security/grounding";
+import { normalizeCitations, parseStatusLine, validateCitations } from "../security/grounding";
 import { canWrite, type TenantScope } from "../security/tenant";
 import { executeToolCall, type ExecutorDeps } from "./tools/executor";
 
@@ -258,6 +258,7 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
   let retrievalMs = 0;
   let firstTokenMs: number | undefined;
   let hit: boolean | undefined;
+  let finalized = false; // set once the assistant row reaches a terminal state
 
   try {
     /* 1 ── history (workspace-scoped, this conversation only) and standalone query */
@@ -306,8 +307,10 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
     const declarations = deps.tools.registry.declarations();
     const streamToUser = r.hit; // on a miss the model's free text is discarded, never shown: only tool actions may proceed
     let finalRaw = "";
-    let toolAttempted = false;
-    let toolSucceeded = false;
+    // "Action" tools (anything not citable) may support an uncited reply like "Saved your task". Citable tools
+    // (search_documents) may not: whatever they retrieve must still be cited, or the answer is refused as ungrounded.
+    let actionAttempted = false;
+    let actionSucceeded = false;
     let steps = 0;
     let exhausted = true;
 
@@ -344,10 +347,11 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
       // ── the model PROPOSES; the app validates, gates and runs ─────────────────────────────
       messages.push({ role: "assistant", text: stepText, toolCalls: calls });
       for (const call of calls) {
-        toolAttempted = true;
+        const citable = deps.tools.registry.get(call.name)?.citable === true;
+        if (!citable) actionAttempted = true;
         const tainted = sources.some((s) => s.flagged);
         const exec = await executeToolCall(deps.tools, { scope, messageId, step: steps + 1, call, tainted, ...(ctx.signal ? { signal: ctx.signal } : {}) });
-        if (exec.status === "succeeded") toolSucceeded = true;
+        if (exec.status === "succeeded" && !citable) actionSucceeded = true;
         let modelText = exec.modelText;
         if (exec.sources?.length) {
           // search_documents: assign continuing citation numbers, fence the new evidence, extend the taint check.
@@ -362,7 +366,7 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
     }
 
     /* 4 ── verify what the model claims, server-side */
-    const parsed = parseStatusLine(finalRaw);
+    const parsed = parseStatusLine(normalizeCitations(finalRaw));
     let content: string;
     let citations: Citation[] = [];
     let abstained = false;
@@ -370,23 +374,23 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
 
     if (exhausted) {
       content = "I reached my step limit while working on that. Please try a simpler request.";
-    } else if (!r.hit && !toolAttempted) {
+    } else if (sources.length === 0 && !actionAttempted) {
       abstained = true;
       content = REFUSAL_NO_DOCS;
-    } else if (parsed.status === "not_in_documents" && !toolSucceeded) {
+    } else if (parsed.status === "not_in_documents" && !actionSucceeded) {
       abstained = true;
       content = stripCitations(parsed.body).trim() || REFUSAL_NO_DOCS;
     } else {
       const v = validateCitations(parsed.body, valid);
       if (v.removed.length) log("warn", "removed fabricated citations", { messageId, removed: v.removed });
       const cleaned = v.text.trim();
-      if (v.used.length === 0 && !toolAttempted) {
+      if (v.used.length === 0 && !actionAttempted) {
         // A factual answer with no valid citation is not grounded — do not present it as one.
         abstained = true;
         content = REFUSAL_UNGROUNDED;
         log("warn", "blocked uncited answer", { messageId });
       } else {
-        content = cleaned || (toolAttempted ? "Done." : REFUSAL_UNGROUNDED);
+        content = cleaned || (actionAttempted ? "Done." : REFUSAL_UNGROUNDED);
         citations = v.used.map((n) => {
           const s = sources[n - 1]!;
           return { n, chunkId: s.chunkId, documentId: s.documentId, documentTitle: s.documentTitle, headingPath: s.headingPath, ordinal: s.ordinal, snippet: snippet(s.content) };
@@ -395,6 +399,7 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
     }
 
     await deps.conv.finishAssistant(scope, messageId, { content, status: "complete", citations, abstained });
+    finalized = true;
     await deps.obs.recordTrace(scope, {
       messageId, kind: "chat", provider: served.provider, model: served.model, usage, latencyMs: now() - started,
       retrievalMs, ...(firstTokenMs !== undefined ? { firstTokenMs } : {}), retrievalHit: r.hit, status: abstained ? "abstained" : "ok",
@@ -406,10 +411,21 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
     // Best-effort persistence: the failure itself must never lose the user's question (already committed).
     try {
       await deps.conv.finishAssistant(scope, messageId, { content: "", status: "failed", errorCode: e.code });
+      finalized = true;
       await deps.obs.recordTrace(scope, { messageId, kind: "chat", provider: served.provider, model: served.model, usage, latencyMs: now() - started, retrievalMs, ...(hit !== undefined ? { retrievalHit: hit } : {}), status: "error", errorCode: e.code });
     } catch {
       /* the DB may be the thing that is down; the earlier commit still holds the question */
     }
     yield { type: "error", code: e.code, message: e.message, retryable: e.retryable, assistantMessageId: messageId };
+  } finally {
+    // The consumer stopped iterating (client disconnected / request cancelled) before a terminal state was reached:
+    // never leave the reply `pending` forever. The user's question is already committed; this makes the reply retryable.
+    if (!finalized) {
+      try {
+        await deps.conv.finishAssistant(scope, messageId, { content: "", status: "failed", errorCode: "aborted" });
+      } catch {
+        /* best effort */
+      }
+    }
   }
 }

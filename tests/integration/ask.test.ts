@@ -204,6 +204,27 @@ describe("durability — nothing the user typed is ever lost", () => {
     expect(await count("conversations", ws)).toBe(before);
   });
 
+  it("a client that disconnects mid-stream leaves a failed, retryable reply — never a reply stuck on 'pending'", async () => {
+    const gen = askQuestion(makeAskDeps(new OfflineLlm()), S, { text: "What is the vault access code?", clientRequestId: "abort-1" });
+    let turn: ReturnType<typeof turnOf> | undefined;
+    for await (const e of gen) {
+      if (e.type === "turn") turn = e;
+      if (e.type === "token") break; // the consumer walks away after the first token
+    }
+    const m = await conversationRepo.getMessage(S, turn!.assistantMessageId);
+    expect(m).toMatchObject({ status: "failed", errorCode: "aborted" });
+    const retried = await drain(retryAnswer(makeAskDeps(new OfflineLlm()), S, turn!.assistantMessageId));
+    expect(doneOf(retried)!.content).toContain("ZEBRA-4417");
+  });
+
+  it("a reply stuck on 'pending' for over two minutes (killed serverless function) becomes retryable", async () => {
+    const conv = await conversationRepo.createConversation(S, "stale");
+    const t = await conversationRepo.beginTurn(S, { conversationId: conv, text: "What is the vault access code?", clientRequestId: "stale-1" });
+    expect(await conversationRepo.reopenFailed(S, t.assistantMessage.id)).toBeNull(); // fresh pending: still in flight, not retryable
+    await withSystem((tx) => tx.execute(sql`UPDATE messages SET created_at = now() - interval '3 minutes' WHERE id = ${t.assistantMessage.id}::uuid`));
+    expect(await conversationRepo.reopenFailed(S, t.assistantMessage.id)).not.toBeNull();
+  });
+
   it("validates input and enforces role and conversation ownership", async () => {
     const deps = makeAskDeps(new OfflineLlm());
     await expect(ask(deps, S, "   ")).rejects.toMatchObject({ code: "validation" });
@@ -373,6 +394,19 @@ describe("tool loop — malformed and multi-step behaviour", () => {
     const done = doneOf(evs)!;
     expect(done.citations.map((c) => c.documentTitle)).toContain("ops");
     expect(done.content).toContain("Page the on-call engineer");
+  });
+
+  it("REGRESSION: a read-only search that finds nothing does NOT excuse an ungrounded answer (found by the live eval)", async () => {
+    const answerAfterSearch = (finalText: string) =>
+      new ScriptedLlm((req) => {
+        if (isCondense(req)) return say("q");
+        return req.messages.some((m) => m.role === "tool") ? say(finalText) : calls(call("search_documents", { query: "kubernetes cluster autoscaler" }));
+      });
+    const invented = doneOf(await ask(makeAskDeps(answerAfterSearch("STATUS: ANSWERED\n\nThe autoscaler is set to 42 nodes.")), S, "How many nodes does the kubernetes autoscaler use?"))!;
+    expect(invented.abstained).toBe(true);
+    expect(invented.content).toBe(REFUSAL_NO_DOCS);
+    const honest = doneOf(await ask(makeAskDeps(answerAfterSearch("STATUS: NOT_IN_DOCUMENTS\n\nThe documents say nothing about that.")), S, "How many nodes does the kubernetes autoscaler use?"))!;
+    expect(honest.abstained).toBe(true);
   });
 
   it("bounds the loop: a model that never stops calling tools ends with a clear message, not a hang", async () => {
