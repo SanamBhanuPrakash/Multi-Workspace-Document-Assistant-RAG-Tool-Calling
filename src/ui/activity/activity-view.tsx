@@ -2,7 +2,7 @@
 
 import { Ban, Check, CheckCircle2, ChevronRight, Loader2, ShieldAlert, Wrench, X } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../toast";
 import type { ToolCallDTO } from "@/core/domain/types";
 import { api, ApiError } from "../api";
 import { cn } from "../cn";

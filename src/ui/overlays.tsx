@@ -34,7 +34,7 @@ export function Drawer({ open, onOpenChange, title, description, children }: { o
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-black/45" />
-        <D.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l border-line bg-panel shadow-2 outline-none">
+        <D.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l border-line bg-panel shadow-2 outline-none">
           <div className="flex items-start justify-between gap-4 border-b border-line p-5">
             <div>
               <D.Title className="text-base font-semibold text-ink">{title}</D.Title>

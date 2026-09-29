@@ -212,6 +212,19 @@
   animation: rise 240ms var(--ease-out) both;
 }
 
+/* Scroll-reveal state machine (see src/ui/marketing/reveal.tsx). Visible unless JS explicitly opts an element in. */
+[data-reveal="hidden"] {
+  opacity: 0;
+  transform: translateY(18px);
+}
+[data-reveal="shown"] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 550ms var(--ease-out) var(--reveal-delay, 0s),
+    transform 550ms var(--ease-out) var(--reveal-delay, 0s);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

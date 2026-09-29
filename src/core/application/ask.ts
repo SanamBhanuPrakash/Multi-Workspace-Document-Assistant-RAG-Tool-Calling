@@ -287,7 +287,7 @@ async function* runTurn(deps: AskDeps, cfg: AskConfig, scope: TenantScope, ctx: 
       hit: r.hit,
       topSimilarity: r.topSimilarity,
       results: r.candidates.map((c) => ({
-        chunkId: c.chunkId, documentId: c.documentId, documentTitle: c.documentTitle, ordinal: c.ordinal, workspaceId: c.workspaceId,
+        chunkId: c.chunkId, documentId: c.documentId, documentTitle: c.documentTitle, headingPath: c.headingPath, ordinal: c.ordinal, workspaceId: c.workspaceId,
         sharedFrom: c.sharedFrom, vectorRank: c.vectorRank, keywordRank: c.keywordRank, vectorSimilarity: c.vectorSimilarity,
         keywordScore: c.keywordScore, rrfScore: c.rrfScore, flagged: c.flagged, usedInContext: r.usable.some((u) => u.chunkId === c.chunkId),
       })),

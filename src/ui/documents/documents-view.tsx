@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, CloudUpload, FileText, Loader2, RotateCcw, Share2, Trash2 } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../toast";
 import type { DocumentDTO } from "@/core/domain/types";
 import { api, ApiError } from "../api";
 import { cn } from "../cn";

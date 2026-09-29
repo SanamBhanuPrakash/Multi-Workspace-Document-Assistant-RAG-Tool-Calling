@@ -3,12 +3,13 @@
 import { AlertTriangle, ArrowDown, ArrowUp, Ban, Check, CheckCircle2, Copy, FileText, History, Loader2, MessageSquarePlus, RotateCcw, ScanSearch, ShieldAlert, Square, Wrench, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../toast";
 import type { Citation, MessageDTO, RetrievalEventDTO } from "@/core/domain/types";
 import { api, ApiError, newRequestId, streamPost, type StreamEvent } from "../api";
 import { cn } from "../cn";
 import { Drawer } from "../overlays";
 import { Badge, Button, EmptyState, Spinner, Textarea } from "../primitives";
+import { sectionLabel } from "../section-label";
 import { usePersisted } from "../use-persisted";
 import { Markdown } from "./markdown";
 import { RetrievalPanel } from "./retrieval-panel";
@@ -489,7 +490,7 @@ function SourceChip({ citation }: { citation: Citation }) {
       <span className="grid size-4 place-items-center rounded bg-brand-soft font-mono text-[10px] font-semibold text-brand">{citation.n}</span>
       <FileText className="size-3 shrink-0" aria-hidden />
       <span className="truncate font-medium text-ink">{citation.documentTitle}</span>
-      {citation.headingPath ? <span className="hidden truncate text-ink-3 sm:inline">· {citation.headingPath}</span> : null}
+      {sectionLabel(citation.documentTitle, citation.headingPath) ? <span className="hidden truncate text-ink-3 sm:inline">· {sectionLabel(citation.documentTitle, citation.headingPath)}</span> : null}
     </span>
   );
 }
@@ -501,7 +502,7 @@ function SourceDetail({ msg, n, onInspect }: { msg: Msg; n: number; onInspect: (
     <div className="space-y-4 text-sm">
       <div className="space-y-1">
         <p className="font-medium text-ink">{c?.documentTitle ?? s?.documentTitle}</p>
-        {(c?.headingPath ?? s?.headingPath) ? <p className="text-ink-2">{c?.headingPath ?? s?.headingPath}</p> : null}
+        {sectionLabel((c?.documentTitle ?? s?.documentTitle) ?? "", (c?.headingPath ?? s?.headingPath) ?? "") ? <p className="text-ink-2">{sectionLabel((c?.documentTitle ?? s?.documentTitle) ?? "", (c?.headingPath ?? s?.headingPath) ?? "")}</p> : null}
         {s?.flagged ? <Badge tone="warn"><AlertTriangle className="size-3" aria-hidden /> Flagged: suspicious instructions in this passage</Badge> : null}
       </div>
       {c ? <blockquote className="rounded-md border-l-2 border-brand bg-panel-2 p-3 text-ink-2">{c.snippet}…</blockquote> : <p className="text-ink-2">The answer is still being written.</p>}

@@ -4,7 +4,7 @@ import { BarChart3, Check, ChevronsUpDown, CheckSquare, FileText, LogOut, Messag
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../toast";
 import { authClient } from "../auth-client";
 import { api, ApiError } from "../api";
 import { cn } from "../cn";

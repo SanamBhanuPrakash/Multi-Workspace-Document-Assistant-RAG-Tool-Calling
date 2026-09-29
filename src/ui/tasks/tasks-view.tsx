@@ -2,7 +2,7 @@
 
 import { CheckSquare } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../toast";
 import type { TaskDTO } from "@/core/domain/types";
 import { api, ApiError } from "../api";
 import { cn } from "../cn";

@@ -136,6 +136,8 @@ export type RetrievalResultRow = {
   chunkId: string;
   documentId: string;
   documentTitle: string;
+  /** Optional: records written before this field existed do not have it. */
+  headingPath?: string;
   ordinal: number;
   workspaceId: string;
   sharedFrom: string | null;

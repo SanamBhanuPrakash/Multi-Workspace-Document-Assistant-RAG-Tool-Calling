@@ -3,7 +3,7 @@
 import { KeyRound, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "../toast";
 import { api, ApiError } from "../api";
 import { Modal } from "../overlays";
 import { Badge, Button, Card, Field, Input } from "../primitives";

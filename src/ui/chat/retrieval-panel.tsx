@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, ShieldCheck, ShieldX } from "lucide-react"
 import type { RetrievalEventDTO } from "@/core/domain/types";
 import { cn } from "../cn";
 import { Badge } from "../primitives";
+import { sectionLabel } from "../section-label";
 
 const pct = (n: number | null) => (n === null ? "—" : `${Math.round(n * 100)}%`);
 const short = (id: string) => `${id.slice(0, 8)}…`;
@@ -93,6 +94,7 @@ export function RetrievalPanel({ event, workspaceName, workspaceColor }: { event
                         </Badge>
                       ) : null}
                     </div>
+                    <div className="truncate text-[12px] text-ink-2">{sectionLabel(r.documentTitle, r.headingPath ?? "")}</div>
                     <div className="font-mono text-[11px] text-ink-3">chunk {short(r.chunkId)} · §{r.ordinal}</div>
                   </td>
                   <td className="px-3 py-2 tabular">

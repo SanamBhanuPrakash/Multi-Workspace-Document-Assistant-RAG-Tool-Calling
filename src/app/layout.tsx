@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fira_Code, Fira_Sans } from "next/font/google";
 import { headers } from "next/headers";
-import { Toaster } from "sonner";
+import { Toaster } from "@/ui/toast";
 import "./globals.css";
 
 const sans = Fira_Sans({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-fira-sans", display: "swap" });
@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         {children}
-        <Toaster position="bottom-right" toastOptions={{ classNames: { toast: "!bg-panel !text-ink !border !border-line !shadow-2", description: "!text-ink-2" } }} />
+        <Toaster />
       </body>
     </html>
   );
