@@ -1,0 +1,25 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# deps / build
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# local data
+pgdata/
+*.log.local
+# local Claude settings (project skills ARE committed)
+.claude/settings.local.json
