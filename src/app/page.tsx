@@ -143,12 +143,14 @@ CREATE POLICY chunks_select ON chunks TO lattice_app
             </Reveal>
             <ol className="mt-12 grid gap-x-10 gap-y-8 md:grid-cols-2">
               {STEPS.map(([t, b], i) => (
-                <Reveal key={t} delay={(i % 2) * 0.06}>
-                  <li className="flex gap-4">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-full border border-line-strong bg-panel-2 font-mono text-sm font-semibold text-ink" aria-hidden>{i + 1}</span>
-                    <div><h3 className="font-semibold text-ink">{t}</h3><p className="mt-1 text-ink-2">{b}</p></div>
-                  </li>
-                </Reveal>
+                <li key={t}>
+                  <Reveal delay={(i % 2) * 0.06}>
+                    <div className="flex gap-4">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full border border-line-strong bg-panel-2 font-mono text-sm font-semibold text-ink" aria-hidden>{i + 1}</span>
+                      <div><h3 className="font-semibold text-ink">{t}</h3><p className="mt-1 text-ink-2">{b}</p></div>
+                    </div>
+                  </Reveal>
+                </li>
               ))}
             </ol>
           </div>

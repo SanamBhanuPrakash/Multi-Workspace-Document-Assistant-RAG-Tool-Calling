@@ -21,7 +21,12 @@
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "scan:secrets": "docker run --rm -v \"%cd%:/repo\" zricethezav/gitleaks:latest detect --source /repo --no-banner --redact",
-    "verify": "npm run typecheck && npm run lint && npm run arch && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run arch && npm run test",
+    "e2e": "next build && playwright test",
+    "e2e:fast": "playwright test",
+    "seed": "tsx --conditions=react-server --env-file=.env scripts/seed.ts",
+    "eval:live": "tsx --conditions=react-server --env-file=.env scripts/eval-live.ts",
+    "smoke:live": "tsx --conditions=react-server --env-file=.env scripts/smoke-live.ts"
   },
   "dependencies": {
     "better-auth": "^1.7.6",
@@ -44,6 +49,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.3",

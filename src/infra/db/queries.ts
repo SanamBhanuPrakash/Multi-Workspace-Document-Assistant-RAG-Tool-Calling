@@ -25,9 +25,31 @@ export const workspaceRepo = {
     });
   },
 
+  /**
+   * First-visit bootstrap. The /app page can render twice at once (prefetch + navigation); both would see "no workspaces" and
+   * both would insert. A per-user advisory lock serialises them, and the count is re-checked INSIDE the lock, so exactly one wins.
+   */
+  async ensureFirst(userId: string, name = "My workspace"): Promise<WorkspaceDTO[]> {
+    return withUser(userId, async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`ws-create:${userId}`}, 0))`);
+      const rows = await tx
+        .select({ id: t.workspaces.id, name: t.workspaces.name, slug: t.workspaces.slug, color: t.workspaces.color, role: t.memberships.role })
+        .from(t.memberships)
+        .innerJoin(t.workspaces, eq(t.workspaces.id, t.memberships.workspaceId))
+        .where(eq(t.memberships.userId, userId))
+        .orderBy(t.workspaces.createdAt);
+      if (rows.length) return rows;
+      const [w] = await tx.insert(t.workspaces).values({ name, slug: slugify(name), color: PALETTE[0]!, ownerId: userId }).returning();
+      await tx.insert(t.memberships).values({ workspaceId: w!.id, userId, role: "owner" });
+      await tx.insert(t.auditLog).values({ workspaceId: null, userId, action: "workspace.create", targetType: "workspace", targetId: w!.id });
+      return [{ id: w!.id, name: w!.name, slug: w!.slug, color: w!.color, role: "owner" }];
+    });
+  },
+
   async create(userId: string, name: string): Promise<WorkspaceDTO> {
     const clean = name.trim().replace(/\s+/g, " ").slice(0, 80);
     return withUser(userId, async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`ws-create:${userId}`}, 0))`); // serialise slug allocation per user
       const existing = await tx.select({ slug: t.workspaces.slug }).from(t.workspaces).where(eq(t.workspaces.ownerId, userId));
       const taken = new Set(existing.map((e) => e.slug));
       const base = slugify(clean);

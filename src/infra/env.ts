@@ -38,9 +38,14 @@ const schema = z
     /** Explicit opt-in so a mis-set production env can never silently run on fake providers. */
     LATTICE_ALLOW_FAKE_PROVIDERS: z.enum(["0", "1"]).default("0"),
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+    /** TEST ONLY: multiplies auth rate limits so a browser suite can create many accounts. Refused unless APP_URL is localhost. */
+    LATTICE_RATE_LIMIT_SCALE: z.coerce.number().int().min(1).max(100).default(1),
   })
   .superRefine((e, ctx) => {
     const usesFake = e.LLM_PROVIDER === "fake" || e.EMBED_PROVIDER === "fake";
+    if (e.LATTICE_RATE_LIMIT_SCALE > 1 && !/^(localhost|127\.0\.0\.1)$/.test(new URL(e.APP_URL).hostname)) {
+      ctx.addIssue({ code: "custom", path: ["LATTICE_RATE_LIMIT_SCALE"], message: "may only be raised when APP_URL is localhost" });
+    }
     if (usesFake && e.NODE_ENV === "production" && e.LATTICE_ALLOW_FAKE_PROVIDERS !== "1") {
       ctx.addIssue({ code: "custom", path: ["LLM_PROVIDER"], message: "fake providers are refused in production" });
     }

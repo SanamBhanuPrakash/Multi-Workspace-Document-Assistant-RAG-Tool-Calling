@@ -36,10 +36,10 @@ function build() {
     rateLimit: {
       enabled: true,
       window: 60,
-      max: 120,
+      max: 120 * e.LATTICE_RATE_LIMIT_SCALE,
       customRules: {
-        "/sign-in/email": { window: 60, max: 8 },
-        "/sign-up/email": { window: 3600, max: 10 },
+        "/sign-in/email": { window: 60, max: 8 * e.LATTICE_RATE_LIMIT_SCALE },
+        "/sign-up/email": { window: 3600, max: 10 * e.LATTICE_RATE_LIMIT_SCALE },
       },
       customStorage: {
         consume: async (key, rule) => {

@@ -170,3 +170,17 @@ beyond: taint-based confirmation, isolation-proof strip, eval harness with adver
 ## 9. Open items needing the owner (cannot be done by the assistant)
 Gemini API key (AI Studio) · Neon project (connection string) · Vercel account link · GitHub repo + push permission ·
 optional Slack/Discord webhook. Development proceeds with fake providers + local Docker until these arrive.
+
+## 10. STATUS & RESUME POINT (updated 2026-09-30, owner went to sleep)
+
+**Done and committed locally (195 unit/integration tests green):** governance + analysis; schema/RLS/migrations 0000-0005; TenantScope; chunker, hygiene, injection scanner, fence, grounding (+citation normaliser); ingestion (idempotent, leased, checkpointed); hybrid exact-in-workspace retrieval; tool registry/executor (taint gate); RAG orchestrator (durable turns, verification, retry/abort); Gemini+Groq adapters with failover chain; Slack/Discord notifier; Better Auth + DAL + CSP proxy; 18 API routes (SSE chat, uploads w/ zip-bomb defence, sharing, confirmations, inspector, observability); full UI (landing w/ Lenis, auth, shell, chat, documents, tool log, tasks, retrieval inspector, insights, settings); seed + fixtures; live eval harness (16/17 -> fixed); browser E2E suite written.
+
+**Resume here, in order:**
+1. `docker compose up -d db` (if stopped) -> `npm run db:migrate`.
+2. **Run the browser suite:** `npx next build` then `npm run e2e:fast`. 9 tests failed in the first run; several causes are fixed (list markup, axe timing, rate-limit scale). Root cause of the fresh-sign-up `insert into workspaces` server error is **still unconfirmed** (see PROJECT_LOG OPEN QUESTION). Read the now-sanitised driver error from the WebServer output, find the true cause, fix, and make its regression test actually fail without the fix.
+3. Green e2e -> `npm run verify` -> commit.
+4. Remaining build items: `unauthenticated` error code (401 currently reuses `not_a_member`); cross-workspace sharing integration+e2e test; per-workspace member invite (optional); CI workflow + gitleaks; eval set into docs/EVALS.md.
+5. **Security hardening (P7):** run the Cloudflare `security-audit` skill over the repo, write docs/SECURITY_AUDIT.md + docs/SECURITY.md (threat model, honest limits: GUC-based RLS, no email verification, free-tier data policy), fix findings.
+6. **Docs (P8):** README.md (what/run locally/env vars/deploy), TESTING.md (two workspaces, demo login, isolation + injection + IDK questions), AI_NOTES.md written ONLY from PROJECT_LOG BUG entries (real bugs: fullwidth citations, read-tool grounding bypass, Trojan-Source hidden chars, reduced-motion blank hero, sonner CSP, ANN outlier flake, my `;`-chained commits), .env.example check.
+7. **Deploy (owner needed):** Neon pooled connection string (or `npx neon@latest auth` in a browser), Vercel account link, then set env vars (never commit), run migrate + `npm run seed -- --reset` against Neon, smoke-test the live URL (isolation canary + injection fixture).
+8. Owner decisions pending: GitHub push (owner will push themselves; local commits carry a Co-Authored-By trailer - assignment requires AI disclosure, so history is NOT being scrubbed); rotate the Gemini/Groq keys after submission (they were pasted in chat).

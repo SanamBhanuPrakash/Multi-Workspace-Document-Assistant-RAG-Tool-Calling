@@ -9,6 +9,30 @@ import * as schema from "./schema";
 export type Db = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
+/**
+ * Drizzle wraps driver failures as `Failed query: <sql> params: <every bound value>`. Anything that logs or renders an
+ * uncaught error (Next.js does) would print document text, names and ciphertext. We re-throw the DRIVER error instead:
+ * same SQLSTATE `code` / `constraint` for callers, no bound parameters in the message.
+ */
+export class DbError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string | undefined,
+    public readonly constraint: string | undefined,
+  ) {
+    super(message);
+    this.name = "DbError";
+  }
+}
+
+function sanitize(err: unknown): unknown {
+  if (err instanceof Error && err.message.startsWith("Failed query:") && err.cause instanceof Error) {
+    const c = err.cause as Error & { code?: string; constraint?: string };
+    return new DbError(c.message.slice(0, 300), c.code, c.constraint);
+  }
+  return err;
+}
+
 // Survive Next.js dev HMR without leaking pools.
 const g = globalThis as unknown as { __latticePool?: pg.Pool };
 
@@ -31,6 +55,14 @@ export function pool(): pg.Pool {
 
 export const db = (): Db => drizzle(pool(), { schema });
 
+async function runTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  try {
+    return await db().transaction(fn);
+  } catch (err) {
+    throw sanitize(err);
+  }
+}
+
 async function applyGuards(tx: Tx): Promise<void> {
   await tx.execute(sql`SET LOCAL statement_timeout = '20s'`);
   await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
@@ -49,7 +81,7 @@ async function applyGuards(tx: Tx): Promise<void> {
  * compile error, and RLS makes a forgotten WHERE clause return nothing rather than everything.
  */
 export async function withTenant<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db().transaction(async (tx) => {
+  return runTx(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE lattice_app`);
     await tx.execute(sql`SELECT set_config('app.user_id', ${scope.userId}, true), set_config('app.workspace_id', ${scope.workspaceId}, true)`);
     await applyGuards(tx);
@@ -60,7 +92,7 @@ export async function withTenant<T>(scope: TenantScope, fn: (tx: Tx) => Promise<
 /** User-level scope (workspace list/create). No workspace is selected, so workspace-scoped tables return nothing. */
 export async function withUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   if (!userId) throw new Error("withUser requires a user id");
-  return db().transaction(async (tx) => {
+  return runTx(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE lattice_app`);
     await tx.execute(sql`SELECT set_config('app.user_id', ${userId}, true), set_config('app.workspace_id', '', true)`);
     await applyGuards(tx);
@@ -73,7 +105,7 @@ export async function withUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): P
  * owner role and therefore BYPASSES RLS. Nothing tenant-facing may call this; it is grep-able on purpose.
  */
 export async function withSystem<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db().transaction(async (tx) => fn(tx));
+  return runTx(fn);
 }
 
 export async function closePool(): Promise<void> {
