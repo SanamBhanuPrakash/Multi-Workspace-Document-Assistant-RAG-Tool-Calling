@@ -15,6 +15,8 @@ export function l2normalize(v: number[]): number[] {
 
 export class GeminiEmbedding implements EmbeddingPort {
   readonly dimensions = EMBEDDING_DIMENSIONS;
+  /** Calibrated on gemini-embedding-001 @768d: related query→doc ≈ 0.74, unrelated ≈ 0.51 (see PROJECT_LOG). */
+  readonly minRelevance = 0.62;
   constructor(
     private readonly apiKey: string,
     readonly model: string,

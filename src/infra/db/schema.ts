@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -249,6 +250,8 @@ export const messages = pgTable(
   "messages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** Monotonic order within the whole table. created_at cannot order a turn: both rows share the transaction's now(). */
+    seq: bigint("seq", { mode: "number" }).generatedAlwaysAsIdentity().notNull(),
     conversationId: uuid("conversation_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
     role: text("role").notNull(),

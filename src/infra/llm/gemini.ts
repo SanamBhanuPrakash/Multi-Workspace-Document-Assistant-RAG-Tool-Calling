@@ -75,6 +75,7 @@ export class GeminiLlm implements LlmPort {
         thinkingConfig: { thinkingBudget: 0 }, // grounded extraction: latency and determinism over deliberation
       },
     };
+    yield { type: "meta", provider: this.provider, model: this.model };
     const res = await fetchWithRetry(
       `${BASE}/models/${this.model}:streamGenerateContent?alt=sse`,
       { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": this.apiKey }, body: JSON.stringify(body) },

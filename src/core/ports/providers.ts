@@ -4,6 +4,11 @@ import type { Usage } from "../domain/types";
 export interface EmbeddingPort {
   readonly model: string;
   readonly dimensions: number;
+  /**
+   * Cosine similarity below which a chunk is treated as "not about this question". Model-specific: it must be calibrated
+   * per embedding model (Gemini scores unrelated text around 0.5, a hashing embedder around 0). See tests/evals.
+   */
+  readonly minRelevance: number;
   embed(texts: string[], kind: "document" | "query", signal?: AbortSignal): Promise<number[][]>;
 }
 
@@ -28,6 +33,8 @@ export type LlmRequest = {
 };
 
 export type LlmEvent =
+  /** Which model actually serves this call (a failover chain may switch). Not counted as output by the chain. */
+  | { type: "meta"; provider: string; model: string }
   | { type: "text"; delta: string }
   /** `rawArgs` is exactly what the model produced (a JSON string). It is untrusted until validated. */
   | { type: "tool_call"; id: string; name: string; rawArgs: string }

@@ -40,6 +40,7 @@ export class GroqLlm implements LlmPort {
   ) {}
 
   async *generate(req: LlmRequest, signal?: AbortSignal): AsyncGenerator<LlmEvent> {
+    yield { type: "meta", provider: this.provider, model: this.model };
     const res = await fetchWithRetry(
       URL_CHAT,
       {

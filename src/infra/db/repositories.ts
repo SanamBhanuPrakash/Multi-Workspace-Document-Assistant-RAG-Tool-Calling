@@ -456,7 +456,7 @@ export const conversationRepo: ConversationRepo = {
         .select()
         .from(t.messages)
         .where(and(eq(t.messages.conversationId, conversationId), eq(t.messages.workspaceId, scope.workspaceId)))
-        .orderBy(desc(t.messages.createdAt), desc(t.messages.id))
+        .orderBy(desc(t.messages.seq))
         .limit(limit);
       return rows.reverse().map(toMessage);
     });

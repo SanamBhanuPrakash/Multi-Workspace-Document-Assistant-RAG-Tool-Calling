@@ -43,6 +43,7 @@ export function fakeEmbedOne(text: string): number[] {
 export class FakeEmbedding implements EmbeddingPort {
   readonly model = "fake-hash-768";
   readonly dimensions = EMBEDDING_DIMENSIONS;
+  readonly minRelevance = 0.25;
   async embed(texts: string[], _kind?: "document" | "query"): Promise<number[][]> {
     return texts.map(fakeEmbedOne);
   }

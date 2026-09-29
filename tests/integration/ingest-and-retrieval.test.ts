@@ -92,6 +92,7 @@ describe("ingestion", () => {
     const flaky: EmbeddingPort = {
       model: embedder.model,
       dimensions: embedder.dimensions,
+      minRelevance: embedder.minRelevance,
       async embed(texts, kind) {
         if (++calls === 2) throw new Error("boom: provider timed out"); // second batch fails
         return embedder.embed(texts, kind);

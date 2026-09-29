@@ -12,10 +12,6 @@ import { childLogger } from "../logging/logger";
  * `failed` and offers a retry.
  */
 export class ChainLlm implements LlmPort {
-  /** Which link actually served the most recent call (surfaced in request traces). */
-  lastServedBy = "";
-  lastModel = "";
-
   constructor(private readonly links: LlmPort[]) {
     if (links.length === 0) throw new Error("ChainLlm needs at least one provider");
   }
@@ -31,10 +27,8 @@ export class ChainLlm implements LlmPort {
     for (const [i, link] of this.links.entries()) {
       let emitted = false;
       try {
-        this.lastServedBy = link.provider;
-        this.lastModel = link.model;
         for await (const ev of link.generate(req, signal)) {
-          emitted = true;
+          if (ev.type !== "meta") emitted = true; // meta is bookkeeping; the consumer keeps the LAST one it sees
           yield ev;
         }
         return;
