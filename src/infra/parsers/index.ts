@@ -9,7 +9,10 @@ import { htmlToMarkdown } from "./html-to-markdown";
  *  - hard limits on bytes, ZIP entry count / declared expansion (DOCX is a ZIP: decompression-bomb defence), PDF pages;
  *  - all output is plain text/markdown that then goes through normalizeText (hidden-Unicode stripping) in registerDocument.
  */
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/** Per file. Sized under Vercel's 4.5 MB request-body cap: a bigger file would be refused by the platform, before our code, with a non-JSON error. */
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+/** Whole multipart request (all files + framing). */
+export const MAX_REQUEST_BYTES = 4_500_000;
 const MAX_PDF_PAGES = 250;
 const MAX_ZIP_ENTRIES = 300;
 const MAX_ZIP_DECLARED_BYTES = 60 * 1024 * 1024;

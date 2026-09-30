@@ -4,7 +4,7 @@ import { registerDocument, processIngestion } from "@/core/application/ingest";
 import { canWrite } from "@/core/security/tenant";
 import { ingestDeps } from "@/infra/container";
 import { documentRepo, rateLimiter, shareRepo } from "@/infra/db/repositories";
-import { MAX_UPLOAD_BYTES, parseUpload } from "@/infra/parsers";
+import { MAX_REQUEST_BYTES, parseUpload } from "@/infra/parsers";
 import { logger, safeError } from "@/infra/logging/logger";
 import { json, workspaceRoute } from "../../../_lib/http";
 
@@ -28,7 +28,7 @@ export const GET = workspaceRoute({}, async ({ scope, requestId }) => {
 export const POST = workspaceRoute({ mutating: true }, async ({ req, scope, user, requestId }) => {
   if (!canWrite(scope)) throw new DomainError("not_a_member", "Your role cannot upload documents.", 403);
   const declared = Number(req.headers.get("content-length") ?? "0");
-  if (declared > (MAX_UPLOAD_BYTES + 512 * 1024) * MAX_FILES) throw new DomainError("payload_too_large", "Upload too large.", 413);
+  if (declared > MAX_REQUEST_BYTES) throw new DomainError("payload_too_large", "Uploads are limited to 4 MB per request. Upload fewer or smaller files.", 413);
   if (!(await rateLimiter.allow(`upload:${user.id}`, 30, 3600))) throw new DomainError("rate_limited", "Too many uploads. Try again later.", 429);
 
   const form = await req.formData().catch(() => {

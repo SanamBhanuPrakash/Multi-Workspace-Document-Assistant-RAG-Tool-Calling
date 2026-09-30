@@ -31,6 +31,20 @@ test.describe("documents, idempotent ingestion, tools", () => {
     await expect(page.getByRole("log").getByText("25 days").first()).toBeVisible();
   });
 
+  test("an oversized upload is refused up front with our error envelope (Vercel's own 4.5 MB body cap would otherwise answer first)", async ({ page }) => {
+    await signupFresh(page);
+    const ws = workspaceIdFrom(page.url());
+    const origin = new URL(page.url()).origin;
+    const res = await page.request.post(`/api/w/${ws}/documents`, {
+      headers: { origin },
+      multipart: { files: { name: "big.txt", mimeType: "text/plain", buffer: Buffer.alloc(4_600_000, "a") } },
+    });
+    expect(res.status()).toBe(413);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("payload_too_large");
+    expect(body.error.message).toMatch(/4 MB/);
+  });
+
   test("the hostile document is flagged, still answerable as data, and never causes an action", async ({ page }) => {
     await signupFresh(page);
     await page.getByRole("link", { name: "Documents" }).click();

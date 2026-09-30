@@ -557,6 +557,23 @@ export const toolCallRepo: ToolCallRepo = {
     });
   },
 
+  async claimHeld(scope, id, patch) {
+    return withTenant(scope, async (tx) => {
+      const won = await tx
+        .update(t.toolCalls)
+        .set({
+          status: patch.status,
+          errorCode: patch.errorCode ?? null,
+          errorMessage: patch.errorMessage ?? null,
+          confirmedBy: patch.confirmedBy,
+          finishedAt: patch.status === "running" ? null : new Date(),
+        })
+        .where(and(eq(t.toolCalls.id, id), eq(t.toolCalls.workspaceId, scope.workspaceId), eq(t.toolCalls.status, "awaiting_confirmation")))
+        .returning({ id: t.toolCalls.id });
+      return won.length === 1;
+    });
+  },
+
   async get(scope, id) {
     return withTenant(scope, async (tx) => {
       const rows = await tx.select().from(t.toolCalls).where(and(eq(t.toolCalls.id, id), eq(t.toolCalls.workspaceId, scope.workspaceId))).limit(1);

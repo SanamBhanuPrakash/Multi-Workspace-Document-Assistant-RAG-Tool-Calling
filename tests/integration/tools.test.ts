@@ -278,6 +278,28 @@ describe("send_summary & integration secrets", () => {
     expect(delivered.length).toBe(n + 1);
   });
 
+  it("CONCURRENCY: simultaneous approvals of one held action run it exactly once (double-click / two tabs)", async () => {
+    const n = delivered.length;
+    const r = await run(A, await newMessage(A), "send_summary", JSON.stringify({ channel: "slack", title: "once", summary: "only once please" }), { tainted: true });
+    expect(r.status).toBe("awaiting_confirmation");
+    const results = await Promise.all(Array.from({ length: 8 }, () => resolveConfirmation(deps(), A, r.callId, "confirm")));
+    expect(delivered.length - n).toBe(1); // ONE webhook, not eight
+    expect(results.filter((x) => x.status === "succeeded").length).toBeGreaterThanOrEqual(1);
+    expect(results.every((x) => x.status === "succeeded" || x.errorCode === "in_progress" || x.status === "running")).toBe(true);
+    expect((await toolCallRepo.get(A, r.callId))!.status).toBe("succeeded");
+  });
+
+  it("CONCURRENCY: approve and decline racing on one held action can never both win", async () => {
+    const before = await taskCount(wsA);
+    const r = await run(A, await newMessage(A), "save_task", JSON.stringify({ title: "race me" }), { tainted: true });
+    const [c, d] = await Promise.all([resolveConfirmation(deps(), A, r.callId, "confirm"), resolveConfirmation(deps(), A, r.callId, "decline")]);
+    const final = (await toolCallRepo.get(A, r.callId))!.status;
+    const created = (await taskCount(wsA)) - before;
+    // Either the approval won (task exists, final succeeded) or the decline won (no task, final declined) — never a task under 'declined'.
+    expect(final === "succeeded" ? created === 1 : final === "declined" && created === 0).toBe(true);
+    void c; void d;
+  });
+
   it("the stored secret is encrypted, and bound to its workspace: moving the ciphertext to another workspace fails to decrypt", async () => {
     const raw = await withSystem((tx) => tx.execute<{ c: string }>(sql`SELECT secret_ciphertext AS c FROM workspace_integrations WHERE workspace_id = ${wsA}::uuid`));
     const ciphertext = raw.rows[0]!.c;

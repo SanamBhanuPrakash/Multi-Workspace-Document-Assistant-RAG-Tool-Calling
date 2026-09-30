@@ -173,8 +173,12 @@ export async function resolveConfirmation(deps: ExecutorDeps, scope: TenantScope
   if (!row) return { callId, name: "unknown", status: "rejected", errorCode: "not_found", modelText: reply(false, { error: { code: "not_found", message: "Tool call not found." } }) };
   if (row.status !== "awaiting_confirmation") return replayExisting(row); // already resolved: idempotent
 
+  // Every transition out of the held state is a compare-and-set: of N concurrent decisions exactly one wins, the rest replay.
+  const lostRace = async (): Promise<ToolExecution> => replayExisting((await deps.calls.get(scope, callId)) ?? row);
+
   if (decision === "decline") {
-    await deps.calls.finish(scope, callId, { status: "declined", errorCode: "declined_by_user", errorMessage: "The user declined this action.", confirmedBy: scope.userId });
+    const won = await deps.calls.claimHeld(scope, callId, { status: "declined", errorCode: "declined_by_user", errorMessage: "The user declined this action.", confirmedBy: scope.userId });
+    if (!won) return lostRace();
     return { callId, name: row.toolName, status: "declined", modelText: reply(false, { error: { code: "declined_by_user", message: "The user declined this action." } }) };
   }
 
@@ -184,6 +188,6 @@ export async function resolveConfirmation(deps: ExecutorDeps, scope: TenantScope
   const reparsed = tool.args.safeParse(row.validatedArgs);
   if (!reparsed.success) return { callId, name: row.toolName, status: "rejected", errorCode: "invalid_arguments", modelText: reply(false, { error: { code: "invalid_arguments", message: describeIssues(reparsed.error) } }) };
 
-  await deps.calls.finish(scope, callId, { status: "running", confirmedBy: scope.userId });
+  if (!(await deps.calls.claimHeld(scope, callId, { status: "running", confirmedBy: scope.userId }))) return lostRace();
   return runTool(deps, scope, tool, callId, reparsed.data);
 }

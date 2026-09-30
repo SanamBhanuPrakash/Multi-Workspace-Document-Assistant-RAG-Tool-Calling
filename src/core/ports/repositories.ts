@@ -93,6 +93,11 @@ export interface ToolCallRepo {
   /** Insert-or-return on (workspace, idempotencyKey). `created=false` means an identical call already exists. */
   begin(scope: TenantScope, input: NewToolCall): Promise<{ call: ToolCallDTO; created: boolean }>;
   finish(scope: TenantScope, id: string, patch: { status: ToolCallStatus; result?: unknown; errorCode?: string; errorMessage?: string; latencyMs?: number; confirmedBy?: string }): Promise<void>;
+  /**
+   * Atomically move a HELD call out of `awaiting_confirmation` (compare-and-set on the status). Exactly one concurrent caller
+   * gets `true`; everyone else gets `false` and must not run the tool. This is what makes a double-clicked "Approve" safe.
+   */
+  claimHeld(scope: TenantScope, id: string, patch: { status: "running" | "declined"; errorCode?: string; errorMessage?: string; confirmedBy: string }): Promise<boolean>;
   get(scope: TenantScope, id: string): Promise<ToolCallDTO | null>;
   list(scope: TenantScope, limit: number): Promise<ToolCallDTO[]>;
 }

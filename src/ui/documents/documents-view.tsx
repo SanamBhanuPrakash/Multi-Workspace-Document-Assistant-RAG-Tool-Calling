@@ -129,7 +129,7 @@ export function DocumentsView({ workspaceId, initialDocs, initialShares, others,
               browse
             </button>
           </p>
-          <p className="mt-1 text-xs text-ink-3">PDF, DOCX, Markdown or text · up to 5 MB each · 5 files at a time</p>
+          <p className="mt-1 text-xs text-ink-3">PDF, DOCX, Markdown or text · up to 4 MB per upload · 5 files at a time</p>
         </div>
       ) : null}
 

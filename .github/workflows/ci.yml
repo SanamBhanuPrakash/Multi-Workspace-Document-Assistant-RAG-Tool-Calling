@@ -38,6 +38,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - name: Dependency audit (fails on high/critical; the known moderates are dev-only, see docs/SECURITY_AUDIT.md)
+        run: npm audit --audit-level=high
 
   e2e:
     name: browser e2e (production build, offline providers)
