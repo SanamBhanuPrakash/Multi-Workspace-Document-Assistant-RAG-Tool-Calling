@@ -1,0 +1,14 @@
+# Extends the default ruleset. The allowlist is deliberately narrow: exact placeholder VALUES (not paths), so a real secret
+# committed to the same files would still be caught.
+title = "Lattice gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Inert test fixtures (verified: the two keys base64-decode to 'test-only-32-byte-key-for-tests!' and 'e2e-only-32-byte-key-for-tests!!'; the Slack URL is an obvious placeholder)."
+regexes = [
+  '''dGVzdC1vbmx5LTMyLWJ5dGUta2V5LWZvci10ZXN0cyE=''',
+  '''ZTJlLW9ubHktMzItYnl0ZS1rZXktZm9yLXRlc3RzISE=''',
+  '''hooks\.slack\.com/services/T00000000/B00000000/abcdefghijklmnopqrstuvwx''',
+]

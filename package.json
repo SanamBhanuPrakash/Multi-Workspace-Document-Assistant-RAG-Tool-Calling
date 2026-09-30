@@ -20,7 +20,7 @@
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
-    "scan:secrets": "docker run --rm -v \"%cd%:/repo\" zricethezav/gitleaks:latest detect --source /repo --no-banner --redact",
+    "scan:secrets": "docker run --rm -v \"%cd%:/repo\" zricethezav/gitleaks:latest detect --source /repo --config /repo/.gitleaks.toml --no-banner --redact",
     "verify": "npm run typecheck && npm run lint && npm run arch && npm run test",
     "e2e": "next build && playwright test",
     "e2e:fast": "playwright test",

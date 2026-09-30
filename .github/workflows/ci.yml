@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the workflow can read the repo and nothing else. No secrets are used anywhere in CI —
+# tests run against a throwaway Postgres service and the deterministic offline providers.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · lint · architecture · unit + integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev
+          POSTGRES_DB: lattice
+        ports: ["54329:5432"] # the port the test config defaults to
+        options: >-
+          --health-cmd "pg_isready -U lattice -d lattice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+
+  e2e:
+    name: browser e2e (production build, offline providers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: verify
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev
+          POSTGRES_DB: lattice
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lattice -d lattice"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      # Build-time placeholders only (the e2e server gets its own env from playwright.config.ts). None of these are real secrets.
+      DATABASE_URL: postgres://lattice:lattice_dev@localhost:54329/lattice
+      APP_URL: http://localhost:3210
+      BETTER_AUTH_SECRET: ci-only-placeholder-ci-only-placeholder-12345
+      ENCRYPTION_KEY: ZTJlLW9ubHktMzItYnl0ZS1rZXktZm9yLXRlc3RzISE=
+      LLM_PROVIDER: fake
+      EMBED_PROVIDER: fake
+      LATTICE_ALLOW_FAKE_PROVIDERS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+  secrets:
+    name: secret scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan every commit, not just the tip
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
