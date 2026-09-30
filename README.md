@@ -2,7 +2,7 @@
 
 Ask questions about your documents and get **grounded answers with citations** — or an honest *"I don't know"*. Each user has several **workspaces**; all workspaces share **one vector store**, with isolation enforced *inside the query* and again by the database. The assistant can also **act** (save tasks, list tasks, send a summary to Slack/Discord) through validated tools, and it is built to stay safe when a document tries to give it orders.
 
-> **Status:** feature-complete and tested locally (245 unit/integration tests, 27 browser tests, a 17-question live evaluation on real providers). **Not deployed yet** — that needs the owner's Neon and Vercel accounts. Live URL: _to be added after deployment_.
+> **Status:** feature-complete and tested locally (245 unit/integration tests, 27 browser tests, a 17-question live evaluation on real providers). **Live:** https://sbprag.vercel.app — sign in with the one-click demo account (see [`TESTING.md`](TESTING.md)).
 
 - 📖 **Try it:** [`TESTING.md`](TESTING.md) — throwaway login, two preloaded workspaces, scripted isolation / "I don't know" / injection / tool checks.
 - 🔐 **Security:** [`docs/SECURITY.md`](docs/SECURITY.md) (threat model) · [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) (findings + limits).
@@ -92,14 +92,14 @@ Copy [`.env.example`](.env.example); it contains only placeholders. `.env` is gi
 | `npm run smoke:live` | provider connectivity check |
 | `npm run scan:secrets` | gitleaks over the full history (Docker) |
 
-## Deploy (Vercel Hobby + Neon free) — owner steps
+## Deploy (Vercel Hobby + Neon free)
 
-This part needs accounts only the owner has, so it is **not done and not verified**:
+How the live site was deployed. Verified at deploy time: all six migrations (including the `lattice_app` role) applied on Neon, the demo data seeded, and the live site signs in and answers. **Not independently verified on the live host:** response headers through Vercel's CDN, `Secure` cookie flags, and the rate limiter behind Vercel's proxy.
 
 1. **Neon:** create/choose a project; copy the **direct** connection string (for migrations) and the **pooled** one (for the app).
 2. **Migrate + seed against Neon** from your machine, using the *direct* URL — migrations take a session-level advisory lock that a transaction pooler does not preserve:
    `DATABASE_URL="<direct url>" npm run db:migrate` then `DATABASE_URL="<direct url>" npm run seed -- --reset` (ingestion embeds the demo documents, so your local `.env` must hold the provider keys; a `DATABASE_URL` set in your shell takes precedence over the `.env` one).
-   ⚠ **Unverified on Neon:** `0002_security.sql` creates the `lattice_app` role and does `GRANT lattice_app TO CURRENT_USER`. Confirm your Neon owner role is allowed to; this is the first thing to check.
+   (`0002_security.sql` creates the `lattice_app` role and runs `GRANT lattice_app TO CURRENT_USER`; this worked with Neon's default `neondb_owner` role on Postgres 18 with pgvector 0.8.6.)
 3. **Vercel:** import the GitHub repo; set the variables from the table above in the project settings (`DATABASE_URL` = the **pooled** URL, `APP_URL` = the production URL). Never commit them.
 4. **Smoke-test the live URL** with the checks in [`TESTING.md`](TESTING.md) (isolation, "I don't know", hostile document). Check response headers (CSP nonce, HSTS) and that the cookie is `Secure`.
 5. Verify the rate limiter behaves behind Vercel's proxy (see the `X-Forwarded-For` note in `docs/SECURITY_AUDIT.md`).
@@ -123,7 +123,7 @@ docs/         SECURITY, SECURITY_AUDIT, EVALS, ASSIGNMENT_ANALYSIS
 
 ## Honest limits
 
-- Not deployed yet; deployment steps above are untested on Neon/Vercel.
+- The live deployment was smoke-tested by hand, not by an automated run against the live URL; headers and cookie flags behind Vercel's CDN are unchecked.
 - The security review was done by the same AI that wrote the code; it is a strong self-review, not an independent audit.
 - Sign-in has no email verification, password reset or per-account lockout (per-IP throttling only).
 - Document text is sent to the LLM providers; free-tier terms may differ from paid — don't put confidential data in the public demo.
