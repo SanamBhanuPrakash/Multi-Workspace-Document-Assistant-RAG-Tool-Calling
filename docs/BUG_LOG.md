@@ -1,6 +1,6 @@
-# Bug log (detail behind AI_NOTES.md)
+# Bug log
 
-The one-page summary is in [`../AI_NOTES.md`](../AI_NOTES.md). This is the full, log-derived record.
+The full, log-derived record of bugs found while building.
 
 Everything below is derived from [`PROJECT_LOG.md`](PROJECT_LOG.md), which was appended to **while the work happened** (`scripts/log.sh`), including the mistakes. Nothing here is reconstructed from memory or invented for the write-up. Timestamps are IST.
 

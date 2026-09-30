@@ -3,7 +3,7 @@ import { estimateTokens } from "../domain/text";
 /**
  * Structure-aware, deterministic chunking.
  *
- * Why this shape (the decision is recorded in AI_NOTES.md):
+ * Why this shape (the decision is recorded in plan.md):
  *  - Split on document structure first (headings / pages) so a chunk never straddles two topics, and keep the heading
  *    path as the citation label ("Refund policy › Digital goods"). Users see *where* an answer came from.
  *  - Pack whole paragraphs up to a token target, splitting on sentences only when a paragraph is too large.
