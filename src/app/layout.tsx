@@ -33,6 +33,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
+        {/* Radix's scroll lock (style-singleton) injects a <style> and reads its nonce from __webpack_nonce__, which Turbopack does not
+            set: without this the strict style-src CSP blocks it. The nonce is per-request and already public to same-origin scripts. */}
+        {nonce ? <script nonce={nonce} dangerouslySetInnerHTML={{ __html: `window.__webpack_nonce__=${JSON.stringify(nonce)}` }} /> : null}
       </head>
       <body>
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-panel focus:px-3 focus:py-2 focus:text-ink focus:shadow-2">

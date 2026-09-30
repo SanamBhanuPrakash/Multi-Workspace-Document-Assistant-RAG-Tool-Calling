@@ -125,6 +125,18 @@ describe("grounded RAG with citations", () => {
     expect(asText).not.toMatch(/ZEBRA-4417 \[1\]/); // stale citation markers removed from replayed assistant turns
     expect(llm.calls.some(isCondense)).toBe(true);
   });
+
+  it("REGRESSION: a condense reply that is a protocol/refusal line is discarded — the raw question is searched instead (found by the browser suite)", async () => {
+    // The offline dev model answered the rewrite request with its own 'STATUS: NOT_IN_DOCUMENTS' refusal, which then became the
+    // search query and made every follow-up miss retrieval. A rewrite that is not a plausible query must never be trusted.
+    const llm = new ScriptedLlm((req) => (isCondense(req) ? say("STATUS: NOT_IN_DOCUMENTS\n\nI don't know — this workspace's documents don't contain that.") : say("STATUS: ANSWERED\n\nIt is in the handbook [1].")));
+    const deps = makeAskDeps(llm);
+    const first = await ask(deps, S, "What is the vault access code?");
+    await ask(deps, S, "What is the vault access code again?", { conversationId: turnOf(first).conversationId });
+    // A retrieval miss short-circuits before the answer call, so a SECOND answer call proves the follow-up retrieved something.
+    expect(llm.answerCalls).toHaveLength(2);
+    expect(promptText(llm.answerCalls[1]!)).toContain("ZEBRA-4417");
+  });
 });
 
 describe("durability — nothing the user typed is ever lost", () => {

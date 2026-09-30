@@ -24,7 +24,7 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
 
   return (
     <ChatView
-      key={`${workspace.id}:${messages.length ? conversationId : "new"}`}
+      key={workspace.id} // NOT keyed by conversation: ChatView adopts its own new conversation without remounting (see the sync block there)
       workspace={{ id: workspace.id, name: workspace.name, color: workspace.color }}
       conversations={conversations}
       conversationId={messages.length ? conversationId : null}

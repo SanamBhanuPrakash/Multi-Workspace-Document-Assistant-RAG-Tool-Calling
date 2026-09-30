@@ -17,6 +17,16 @@ describe("workspace bootstrap & creation under concurrency", () => {
     expect(await workspaceRepo.listForUser(u)).toHaveLength(1);
   });
 
+  it("REGRESSION: /app rendering twice for many brand-new users never surfaces a unique-violation (confirmed root cause of the e2e sign-up failure)", async () => {
+    // A single 12-way burst did NOT reproduce the bug (it passed without the lock). The real trigger is two overlapping
+    // requests per fresh user, so exercise many users x 3 overlapping calls and require that none rejects.
+    const users = await Promise.all(Array.from({ length: 25 }, (_, i) => makeUser(`fresh-${i}`)));
+    const settled = await Promise.allSettled(users.flatMap((u) => [1, 2, 3].map(() => workspaceRepo.ensureFirst(u))));
+    const failures = settled.filter((s) => s.status === "rejected").map((s) => String((s as PromiseRejectedResult).reason));
+    expect(failures).toEqual([]);
+    for (const u of users) expect(await workspaceRepo.listForUser(u)).toHaveLength(1);
+  });
+
   it("ensureFirst is a no-op once the user has a workspace", async () => {
     const u = await makeUser("has-ws");
     const w = await workspaceRepo.create(u, "Existing");

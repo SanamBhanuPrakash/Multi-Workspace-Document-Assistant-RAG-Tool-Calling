@@ -141,7 +141,9 @@ async function condense(deps: AskDeps, history: LlmMessage[], question: string, 
       signal,
     );
     const q = text.trim().replace(/^["'`]+|["'`]+$/g, "").split("\n")[0]!.trim();
-    return { query: q.length >= 2 && q.length <= 400 ? q : question, usage };
+    // A rewrite that is our own answer-protocol line (a model that ignored the instruction) is not a query: search the raw question.
+    const plausible = q.length >= 2 && q.length <= 400 && !/^STATUS:/i.test(q);
+    return { query: plausible ? q : question, usage };
   } catch {
     return { query: question, usage: { tokensIn: 0, tokensOut: 0 } };
   }

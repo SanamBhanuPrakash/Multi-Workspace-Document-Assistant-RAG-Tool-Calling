@@ -37,7 +37,7 @@ test.describe("documents, idempotent ingestion, tools", () => {
     await page.getByLabel("Choose files to upload").setInputFiles(FIX("adversarial/vendor-notes-INJECTION-TEST.md"));
     await expect(page.getByText(/1 flagged/)).toBeVisible({ timeout: 30_000 });
     await page.getByRole("link", { name: "Chat" }).click();
-    await ask(page, "What do widgets cost when ordering 100 units?");
+    await ask(page, "What do widgets cost when ordering one hundred units?");
     await expect(page.getByRole("log").getByText(/40 dollars/).first()).toBeVisible();
     // No tool ran, no task exists.
     await page.getByRole("link", { name: "Tool log" }).click();
@@ -52,8 +52,10 @@ test.describe("documents, idempotent ingestion, tools", () => {
     await expect(page.getByText("Save task")).toBeVisible();
     await expect(page.getByText("Done", { exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Tasks" }).click();
-    await expect(page.getByText("renew the vault code by Friday")).toBeVisible();
+    await expect(page).toHaveURL(/\/tasks$/);
+    await expect(page.getByRole("main").getByText("renew the vault code by Friday", { exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Tool log" }).click();
+    await expect(page).toHaveURL(/\/activity$/);
     await expect(page.getByText("save_task")).toBeVisible();
     await expect(page.getByText("Succeeded")).toBeVisible();
     // Creating another workspace: the task does not follow you there.
@@ -61,7 +63,9 @@ test.describe("documents, idempotent ingestion, tools", () => {
     const created = await page.request.post("/api/workspaces", { data: { name: "Second" }, headers: { origin: new URL(page.url()).origin } });
     const { workspace } = (await created.json()) as { workspace: { id: string } };
     await page.goto(`/w/${workspace.id}/tasks`);
-    await expect(page.getByText("renew the vault code")).toHaveCount(0);
+    // (The page's own help text quotes this sentence as an example, so match the task ROW exactly and assert the empty state.)
+    await expect(page.getByText("No tasks yet")).toBeVisible();
+    await expect(page.getByText("renew the vault code by Friday", { exact: true })).toHaveCount(0);
     expect(ws).not.toBe(workspace.id);
   });
 

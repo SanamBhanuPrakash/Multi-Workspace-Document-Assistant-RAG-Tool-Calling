@@ -79,6 +79,23 @@ export function ChatView({ workspace, conversations, conversationId: initialConv
   const [atBottom, setAtBottom] = React.useState(true);
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
+  // Server-driven conversation changes (sidebar click, "New chat", deep link) replace local state; but when the server merely
+  // catches up with the conversation THIS instance just created (router.refresh after the first answer), local state is
+  // already right and must not be discarded — a remount there would kill a follow-up that is mid-stream.
+  const [syncedFor, setSyncedFor] = React.useState(initialConversationId);
+  const [epoch, setEpoch] = React.useState(0);
+  if (initialConversationId !== syncedFor) {
+    setSyncedFor(initialConversationId);
+    if (initialConversationId !== conversationId) {
+      setMessages(fromServer(initialMessages, initialTools));
+      setConversationId(initialConversationId);
+      setEpoch((e) => e + 1);
+    }
+  }
+  React.useEffect(() => {
+    if (epoch) abortRef.current?.abort(); // an answer streaming into the conversation we just left
+  }, [epoch]);
+
   // Unsent text survives reloads and failed sends (see usePersisted: storage is optional, never required).
   React.useEffect(() => {
     const ta = taRef.current;
@@ -103,7 +120,10 @@ export function ChatView({ workspace, conversations, conversationId: initialConv
       switch (ev.type) {
         case "turn": {
           const e = ev as unknown as { conversationId: string; userMessageId: string; assistantMessageId: string };
-          setMessages((all) => all.map((m) => (m.id === targetRef.id ? { ...m, id: e.assistantMessageId } : m.id === `${targetRef.id}:user` ? { ...m, id: e.userMessageId } : m)));
+          // Capture BEFORE mutating: React may run this updater later (when updates are already queued), by which time
+          // targetRef.id would already be the new id and nothing would be renamed — every later patch would miss its row.
+          const tmpId = targetRef.id;
+          setMessages((all) => all.map((m) => (m.id === tmpId ? { ...m, id: e.assistantMessageId } : m.id === `${tmpId}:user` ? { ...m, id: e.userMessageId } : m)));
           targetRef.id = e.assistantMessageId;
           setConversationId(e.conversationId);
           window.history.replaceState(null, "", `?c=${e.conversationId}`);

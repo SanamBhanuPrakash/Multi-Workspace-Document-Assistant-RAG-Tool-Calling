@@ -218,7 +218,7 @@ CREATE POLICY chunks_select ON chunks TO lattice_app
       </main>
 
       <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-ink-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-ink-2">
           <Logo className="opacity-80" />
           <p>Next.js · Postgres + pgvector · Gemini &amp; Groq · Built on a free-tier stack.</p>
         </div>

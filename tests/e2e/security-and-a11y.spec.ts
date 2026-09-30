@@ -7,9 +7,9 @@ test.describe("auth & session", () => {
     await page.goto("/w/00000000-0000-4000-8000-000000000000");
     await expect(page).toHaveURL(/\/login\?next=/);
     await page.getByLabel("Email").fill("demo@lattice.demo");
-    await page.getByLabel("Password").fill("definitely-wrong-password");
+    await page.getByLabel("Password", { exact: true }).fill("definitely-wrong-password");
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("alert")).toContainText("Incorrect email or password");
+    await expect(page.getByRole("alert").filter({ hasText: "Incorrect email or password" })).toBeVisible();
 
     // `next` pointing off-site must land on /app, never on the attacker's host.
     await page.goto("/login?next=//evil.example/steal");
@@ -134,6 +134,22 @@ test.describe("accessibility & robustness", () => {
     await page.getByPlaceholder(/Switch workspace/).fill("beta");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: /Workspace: Beta Labs/ })).toBeVisible();
+  });
+
+  test("overlays (palette, workspace switcher) open without a single CSP violation", async ({ page }) => {
+    // Radix's scroll lock injects a <style>; under a strict nonce CSP it is blocked unless the nonce is bridged to it.
+    const violations: string[] = [];
+    page.on("console", (m) => {
+      if (m.type() === "error" && /Content Security Policy/i.test(m.text())) violations.push(m.text().slice(0, 140));
+    });
+    await loginDemo(page);
+    await page.keyboard.press("Control+k");
+    await expect(page.getByPlaceholder(/Switch workspace/)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /Switch workspace/ }).click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    expect(violations).toEqual([]);
   });
 
   test("mobile: no horizontal scrolling on the main pages", async ({ browser }) => {

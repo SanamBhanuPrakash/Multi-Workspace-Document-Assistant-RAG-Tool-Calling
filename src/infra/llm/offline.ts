@@ -26,7 +26,10 @@ export class OfflineLlm implements LlmPort {
     let text: string;
     let toolCall: { name: string; args: unknown } | null = null;
 
-    if (last?.role === "tool") {
+    if (req.system.startsWith("Rewrite the user's latest message")) {
+      // Follow-up rewrite request: the offline model cannot resolve references, so the standalone query is the question itself.
+      text = last && last.role === "user" ? last.text.trim() : "";
+    } else if (last?.role === "tool") {
       const r = JSON.parse(last.text) as { ok: boolean; pending?: boolean; result?: { title?: string; found?: number; delivered?: boolean; count?: number }; error?: { message?: string } };
       text = r.ok
         ? `STATUS: ANSWERED\n\nDone. ${r.result?.title ? `Saved task "${r.result.title}".` : r.result?.delivered ? "Summary delivered." : r.result?.count !== undefined ? `You have ${r.result.count} matching task(s).` : "Completed."}`
