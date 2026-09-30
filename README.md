@@ -6,7 +6,7 @@ Ask questions about your documents and get **grounded answers with citations** �
 
 - 📖 **Try it:** [`TESTING.md`](TESTING.md) — throwaway login, two preloaded workspaces, scripted isolation / "I don't know" / injection / tool checks.
 - 🔐 **Security:** [`docs/SECURITY.md`](docs/SECURITY.md) (threat model) · [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) (findings + limits).
-- 🧪 **Evaluation:** [`docs/EVALS.md`](docs/EVALS.md) · **AI usage & real bugs:** [`AI_NOTES.md`](AI_NOTES.md) · **Build log:** [`PROJECT_LOG.md`](PROJECT_LOG.md) · **Plan:** [`plan.md`](plan.md).
+- 🧪 **Evaluation:** [`docs/EVALS.md`](docs/EVALS.md) · **AI usage:** [`AI_NOTES.md`](AI_NOTES.md) · **Bug log:** [`docs/BUG_LOG.md`](docs/BUG_LOG.md) · **Build log:** [`PROJECT_LOG.md`](PROJECT_LOG.md) · **Plan:** [`plan.md`](plan.md).
 
 ## What it does — against the brief
 
