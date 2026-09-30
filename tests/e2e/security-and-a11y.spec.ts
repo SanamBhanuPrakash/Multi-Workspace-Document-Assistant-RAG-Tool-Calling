@@ -19,6 +19,13 @@ test.describe("auth & session", () => {
     expect(page.url()).not.toContain("evil.example");
   });
 
+  test("API calls without a session get 401 + a dedicated 'unauthenticated' code (not a membership error)", async ({ request }) => {
+    const res = await request.get("/api/workspaces");
+    expect(res.status()).toBe(401);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("unauthenticated");
+  });
+
   test("session cookie is httpOnly + SameSite=Lax and invisible to page JavaScript", async ({ page, context }) => {
     await loginDemo(page);
     const cookie = (await context.cookies()).find((c) => c.name.includes("session_token"))!;

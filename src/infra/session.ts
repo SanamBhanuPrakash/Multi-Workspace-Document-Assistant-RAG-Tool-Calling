@@ -39,7 +39,7 @@ export async function requireWorkspaceScope(workspaceId: string): Promise<{ user
 /** For route handlers: throws DomainError instead of redirecting. */
 export async function apiUser(req: Request): Promise<SessionUser> {
   const s = await auth().api.getSession({ headers: req.headers });
-  if (!s) throw new DomainError("not_a_member", "Sign in required.", 401);
+  if (!s) throw new DomainError("unauthenticated", "Sign in required.", 401);
   return { id: s.user.id, name: s.user.name, email: s.user.email };
 }
 

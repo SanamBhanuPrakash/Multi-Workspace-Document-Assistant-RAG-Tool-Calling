@@ -1,5 +1,6 @@
 /** Domain errors carry a stable machine `code` (safe to show) and never include secrets or foreign-tenant data. */
 export type ErrorCode =
+  | "unauthenticated"
   | "not_a_member"
   | "not_found"
   | "validation"
