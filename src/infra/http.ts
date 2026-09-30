@@ -13,6 +13,11 @@ export type RetryOptions = {
   attemptTimeoutMs?: number;
   deadlineMs?: number;
   baseDelayMs?: number;
+  /**
+   * If a 429/503 asks us to wait LONGER than this, give up now instead of sleeping. Set it when a fallback exists (the LLM
+   * chain): sleeping 12s on a rate-limited model while a healthy one is next in line is pure user-visible latency.
+   */
+  maxRetryAfterMs?: number;
   signal?: AbortSignal;
   /** Injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
@@ -20,6 +25,12 @@ export type RetryOptions = {
 };
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Errors that must NOT be retried in place, yet keep their `kind`: a bad key is still "unavailable" so a fallback provider
+ * may take over (ProviderError.retryable drives failover), but hammering the same endpoint with the same key is pointless.
+ */
+const NO_RETRY = new WeakSet<Error>();
 
 function retryAfterMs(res: Response): number | null {
   const h = res.headers.get("retry-after");
@@ -68,11 +79,15 @@ export async function fetchWithRetry(url: string, init: RequestInit, opts: Retry
       // Drain and discard the body: it may echo the request (and therefore content or keys).
       await res.body?.cancel().catch(() => undefined);
       if (kind !== "rate_limited" && kind !== "unavailable" && kind !== "timeout") throw new ProviderError(kind, PUBLIC_MESSAGES[kind]);
-      if (res.status === 401 || res.status === 403) throw new ProviderError("unavailable", PUBLIC_MESSAGES.unavailable); // retrying a bad key is pointless
+      if (res.status === 401 || res.status === 403) {
+        const bad = new ProviderError("unavailable", PUBLIC_MESSAGES.unavailable); // retrying a bad key is pointless
+        NO_RETRY.add(bad);
+        throw bad;
+      }
       wait = retryAfterMs(res);
     } catch (err) {
       if (err instanceof ProviderError) {
-        if (!err.retryable) throw err;
+        if (!err.retryable || NO_RETRY.has(err)) throw err;
         lastKind = err.kind;
       } else if (opts.signal?.aborted) {
         throw new ProviderError("timeout", "Request cancelled.");
@@ -81,6 +96,7 @@ export async function fetchWithRetry(url: string, init: RequestInit, opts: Retry
       }
     }
     if (attempt === attempts) break;
+    if (wait !== null && opts.maxRetryAfterMs !== undefined && wait > opts.maxRetryAfterMs) break;
     const backoff = wait ?? Math.random() * Math.min(8_000, (opts.baseDelayMs ?? 500) * 2 ** (attempt - 1)); // full jitter
     if (Date.now() - started + backoff > deadline) break;
     await sleep(backoff);

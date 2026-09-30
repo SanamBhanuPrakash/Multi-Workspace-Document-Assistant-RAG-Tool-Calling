@@ -71,7 +71,12 @@ describe("RLS: tenant isolation at the database layer", () => {
       tx.execute<{ content: string }>(sql`SELECT content FROM chunks ORDER BY embedding <=> ${q}::vector LIMIT 5`),
     );
     expect(asBob.rows.map((r) => r.content)).not.toContain("The vault code is ZEBRA-4417.");
-    expect(asBob.rows.length).toBe(1);
+    // SAFETY property only. How many of Bob's OWN rows come back is ANN recall, not isolation: an approximate (HNSW) scan
+    // returns its nearest candidates, RLS then drops the foreign ones, and Bob's row can be missed when many closer foreign
+    // vectors exist (this failed once in a full-suite run while passing alone 3/3; see PROJECT_LOG). Production retrieval
+    // never relies on this path — it searches EXACTLY inside the workspace (chunkStore.hybridSearch).
+    expect(asBob.rows.length).toBeLessThanOrEqual(1);
+    expect(asBob.rows.every((r) => r.content === "Beta only fact.")).toBe(true);
   });
 
   it("RLS-only vector query (no app-level filter) NEVER leaks foreign rows, even beside thousands of closer ones", async () => {

@@ -60,6 +60,8 @@ export class GeminiLlm implements LlmPort {
   constructor(
     private readonly apiKey: string,
     readonly model: string,
+    /** Set when a fallback follows this link: give up on a long Retry-After instead of sleeping through it. */
+    private readonly failFastRetryAfterMs?: number,
   ) {}
 
   async *generate(req: LlmRequest, signal?: AbortSignal): AsyncGenerator<LlmEvent> {
@@ -79,7 +81,7 @@ export class GeminiLlm implements LlmPort {
     const res = await fetchWithRetry(
       `${BASE}/models/${this.model}:streamGenerateContent?alt=sse`,
       { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": this.apiKey }, body: JSON.stringify(body) },
-      { attempts: 2, attemptTimeoutMs: 30_000, deadlineMs: 40_000, ...(signal ? { signal } : {}) },
+      { attempts: 2, attemptTimeoutMs: 30_000, deadlineMs: 40_000, ...(this.failFastRetryAfterMs !== undefined ? { maxRetryAfterMs: this.failFastRetryAfterMs } : {}), ...(signal ? { signal } : {}) },
     );
     if (!res.body) throw new ProviderError("unavailable", "The AI provider returned an empty response.");
 
