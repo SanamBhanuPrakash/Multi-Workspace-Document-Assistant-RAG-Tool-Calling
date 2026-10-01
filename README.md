@@ -120,11 +120,3 @@ fixtures/     demo documents + a clearly-labelled adversarial document
 scripts/      migrate, seed, live eval, smoke, log helper
 docs/         SECURITY, SECURITY_AUDIT, EVALS, ASSIGNMENT_ANALYSIS
 ```
-
-## Honest limits
-
-- The live deployment was smoke-tested by hand, not by an automated run against the live URL; headers and cookie flags behind Vercel's CDN are unchecked.
-- The security review was done by the same AI that wrote the code; it is a strong self-review, not an independent audit.
-- Sign-in has no email verification, password reset or per-account lockout (per-IP throttling only).
-- Document text is sent to the LLM providers; free-tier terms may differ from paid — don't put confidential data in the public demo.
-- The live evaluation is 17 self-written questions, not a benchmark. Everything else is in `docs/EVALS.md` and `docs/SECURITY_AUDIT.md`.
